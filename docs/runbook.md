@@ -3,27 +3,27 @@
 ## 명령
 
 ```bash
-npm install        # 의존 설치
-npm run dev        # vite 개발 서버 (HMR)
-npm test           # vitest run — 커밋 전 필수, 통과해야 함
-npm run test:watch # vitest watch
-npm run lint       # biome check (lint+format 검사) — 커밋 전 필수
-npm run lint:fix   # biome check --write (safe+unsafe 수정 적용)
-npm run format     # biome format --write (포맷만)
-npm run typecheck  # tsc --noEmit
-npm run build      # tsc --noEmit + vite build → dist/
-npm run cf:dev     # build + wrangler dev (로컬서 _headers/CSP 적용)
-npm run deploy     # build + wrangler deploy
+bun install        # 의존 설치
+bun run dev        # vite 개발 서버 (HMR)
+bun run test       # vitest run — 커밋 전 필수, 통과해야 함 (bun test 아님: 내장 러너로 빠짐)
+bun run test:watch # vitest watch
+bun run lint       # biome check (lint+format 검사) — 커밋 전 필수
+bun run lint:fix   # biome check --write (safe+unsafe 수정 적용)
+bun run format     # biome format --write (포맷만)
+bun run typecheck  # tsc --noEmit
+bun run build      # tsc --noEmit + vite build → dist/
+bun run cf:dev     # build + wrangler dev (로컬서 _headers/CSP 적용)
+bun run deploy     # build + wrangler deploy
 ```
 
 ## 배포 전 체크
 
-1. `npm run lint` 그린(biome).
-2. `npm test` 그린.
-3. `npm run build` 성공(타입 에러 0).
+1. `bun run lint` 그린(biome).
+2. `bun run test` 그린.
+3. `bun run build` 성공(타입 에러 0).
 4. 각도 규약/스핀 건드렸으면 브라우저서 실제 스핀 → "포인터 아래 이름 == 표시 당첨자"
    (개발 빌드 `window.__cd` 시드, prod strip).
-5. CSP 건드렸으면 `npm run cf:dev` 후 `curl -sI http://localhost:8787` 로 CSP 헤더 +
+5. CSP 건드렸으면 `bun run cf:dev` 후 `curl -sI http://localhost:8787` 로 CSP 헤더 +
    브라우저 콘솔 위반 0 확인.
 
 ## 실패 모드

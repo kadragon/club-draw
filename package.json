@@ -13,13 +13,13 @@
     "lint": "biome check src test",
     "lint:fix": "biome check --write src test",
     "format": "biome format --write src test",
-    "deploy": "npm run build && wrangler deploy",
-    "cf:dev": "npm run build && wrangler dev"
+    "deploy": "bun run build && wrangler deploy",
+    "cf:dev": "bun run build && wrangler dev"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.16",
-    "typescript": "^5.7.2",
-    "vite": "^7.0.0",
+    "typescript": "^6",
+    "vite": "^8",
     "vitest": "^4.1.8",
     "wrangler": "^4.0.0"
   }

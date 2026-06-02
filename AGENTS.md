@@ -33,15 +33,15 @@
 ## 명령
 
 ```bash
-npm run lint       # biome check (lint+format) — 필수: 통과해야 커밋
-npm run lint:fix   # biome 자동 수정(safe+unsafe)
-npm test           # 필수: 통과해야 커밋
-npm run build      # tsc --noEmit + vite build
-npm run cf:dev     # wrangler dev 로컬 확인
+bun run lint       # biome check (lint+format) — 필수: 통과해야 커밋
+bun run lint:fix   # biome 자동 수정(safe+unsafe)
+bun run test       # 필수: 통과해야 커밋 (bun test 아님 — 내장 러너로 새서 vitest 무시)
+bun run build      # tsc --noEmit + vite build
+bun run cf:dev     # wrangler dev 로컬 확인
 ```
 
 > 정적 분석 = Biome(`biome.json`). recommended 규칙 + 포맷. `noNonNullAssertion` off(DOM `!` 관용),
-> tsconfig `strict`가 타입 가드. pre-commit/CI 게이트에 `npm run lint` 포함.
+> tsconfig `strict`가 타입 가드. pre-commit/CI 게이트에 `bun run lint` 포함.
 
 ## 규칙
 
