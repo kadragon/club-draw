@@ -1,0 +1,73 @@
+#!/bin/sh
+# club-draw post-commit: auto SemVer bump from the commit's [TYPE], folded into
+# the just-made commit via --amend ([FEAT]→minor, any other [TYPE]→patch,
+# major bump stays manual). post-commit is the only hook that can both read the
+# message and land a file in the same commit (pre-commit lacks the message;
+# prepare-commit-msg/commit-msg can't alter the committed tree).
+#
+# Guards (any → no-op): our own amend re-fire, merge commits, no [TYPE] tag,
+# and "version already changed in this commit" (covers manual `git commit --amend`).
+set -e
+
+# 1. Loop break: our amend below re-fires post-commit with this set.
+[ -n "$CLUB_DRAW_BUMPING" ] && exit 0
+
+# 2. Skip merge commits (2+ parents).
+git rev-parse -q --verify HEAD^2 >/dev/null 2>&1 && exit 0
+
+# 2b. Skip replayed/sequencing commits: rebase, cherry-pick, in-progress merge.
+# Bumping per replayed commit corrupts version history and causes amend conflicts.
+GIT_DIR=$(git rev-parse --git-dir)
+if [ -d "$GIT_DIR/rebase-merge" ] || [ -d "$GIT_DIR/rebase-apply" ] ||
+  [ -f "$GIT_DIR/CHERRY_PICK_HEAD" ] || [ -f "$GIT_DIR/MERGE_HEAD" ]; then
+  exit 0
+fi
+
+# 3. Require a leading [TYPE] tag.
+SUBJECT=$(git log -1 --format=%s)
+TYPE=$(printf '%s' "$SUBJECT" | sed -n 's/^\[\([A-Z]*\)\].*/\1/p')
+[ -n "$TYPE" ] || exit 0
+
+# 4. Already bumped in THIS commit? (manual amend, or a stray re-fire.)
+if git rev-parse -q --verify HEAD~1 >/dev/null 2>&1 &&
+  git diff HEAD~1 HEAD -- package.json | grep -Eq '^[+-][[:space:]]*"version"'; then
+  exit 0
+fi
+
+PKG="package.json"
+
+# 5. Refuse to fold unrelated work: if package.json has uncommitted worktree
+# changes, our `git add` + --amend would sweep them into the previous commit.
+# Skip the bump rather than corrupt the commit.
+if ! git diff --quiet -- "$PKG"; then
+  echo "[post-commit] $PKG has uncommitted changes; skipping auto-bump"
+  exit 0
+fi
+
+CUR=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([0-9]*\.[0-9]*\.[0-9]*\)".*/\1/p' "$PKG" | head -n1)
+[ -n "$CUR" ] || exit 0
+
+MAJOR=${CUR%%.*}
+REST=${CUR#*.}
+MINOR=${REST%%.*}
+PATCH=${REST#*.}
+if [ "$TYPE" = "FEAT" ]; then
+  MINOR=$((MINOR + 1))
+  PATCH=0
+else
+  PATCH=$((PATCH + 1))
+fi
+NEW="$MAJOR.$MINOR.$PATCH"
+
+# Rewrite only the first top-level "version" line, preserving indentation/comma.
+awk -v new="$NEW" '
+  !done && /"version"[[:space:]]*:/ {
+    sub(/"version"[[:space:]]*:[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"/, "\"version\": \"" new "\"")
+    done = 1
+  }
+  { print }
+' "$PKG" >"$PKG.tmp" && mv "$PKG.tmp" "$PKG"
+
+git add "$PKG"
+CLUB_DRAW_BUMPING=1 git commit --amend --no-edit --no-verify >/dev/null
+echo "[post-commit] version $CUR → $NEW ($TYPE)"

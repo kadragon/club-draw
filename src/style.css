@@ -297,6 +297,16 @@ body {
   opacity: 0.4;
   cursor: not-allowed;
 }
+/* Unified keyboard focus ring — inputs use border-color (above); interactive
+   controls get an ink outline only for keyboard nav, not mouse clicks. */
+.btn:focus-visible,
+.spin-btn:focus-visible,
+.overlay-close:focus-visible,
+.import summary:focus-visible,
+.li-del:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
 .file-btn {
   display: inline-flex;
   align-items: center;
@@ -454,6 +464,19 @@ body {
   background: var(--muted);
   cursor: not-allowed;
   opacity: 0.9;
+}
+/* While the wheel turns: gentle pulse so the locked button reads as "working". */
+.spin-btn.is-spinning {
+  animation: spin-pulse 0.8s ease-in-out infinite;
+}
+@keyframes spin-pulse {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.06);
+  }
 }
 .status {
   font-size: 14px;
@@ -727,6 +750,26 @@ body {
   from {
     transform: scale(0.85);
     opacity: 0;
+  }
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────────────
+   Strip decorative animation/transition. The spin itself still runs the full
+   result path (collapsed to a beat in JS); only the visual flourish is cut. */
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .overlay-card,
+  .spin-btn.is-spinning {
+    animation: none;
+  }
+  .btn,
+  .spin-btn,
+  .input,
+  .textarea {
+    transition: none;
+  }
+  .spin-btn:active:not(:disabled) {
+    transform: translate(-50%, -50%);
   }
 }
 

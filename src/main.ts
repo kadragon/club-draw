@@ -16,6 +16,10 @@ import { createWheel } from "./wheel.js";
 
 const TWO_PI = Math.PI * 2;
 
+/** Honor the OS "reduce motion" setting — compress visuals only, never the result. */
+const reduceMotion = (): boolean =>
+  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 const state: AppState = loadState();
@@ -84,9 +88,15 @@ function rebuildWheel() {
  * the draw invariant) and can strand the UI. Mutating handlers no-op until the
  * spin settles. Pure-settings (spin time, sound) and stage/overlay navigation stay
  * live — they never change wheel geometry or the in-flight prize.
+ *
+ * `isRevealing` extends the lock across the post-spin reveal beat: `spinTo` flips
+ * `spinning` to false the instant the animation lands, but the winner isn't
+ * persisted until `onWin` fires after the beat delay. Without this, a delete/reset/
+ * import in that window could drop the pending winner before it's recorded.
  */
+let isRevealing = false;
 function spinLocked(): boolean {
-  return wheel.isSpinning();
+  return wheel.isSpinning() || isRevealing;
 }
 
 // ── Rendering ───────────────────────────────────────────────────────────────
@@ -257,13 +267,18 @@ function spin() {
   const target = computeTargetRotation(result.wheel, result.index, turns, frac);
 
   els.spinBtn.disabled = true;
+  els.spinBtn.classList.add("is-spinning");
+  els.spinBtn.textContent = "…";
   els.status.textContent = "추첨 중…";
 
   let lastPhase = -1;
   let lastTickAt = 0;
   const seg = TWO_PI / Math.max(1, result.wheel.totalSlots);
 
-  wheel.spinTo(target, state.settings.spinMs, {
+  // reduce-motion: keep the full result path, just collapse the animation to a beat.
+  const spinMs = reduceMotion() ? 1 : state.settings.spinMs;
+
+  wheel.spinTo(target, spinMs, {
     onTick: () => {
       if (!state.settings.sound) return;
       const phase = Math.floor(wheel.getRotation() / seg);
@@ -274,7 +289,21 @@ function spin() {
         lastTickAt = now;
       }
     },
-    onDone: () => onWin(result.winner.id, prize.id),
+    onDone: () => {
+      els.spinBtn.classList.remove("is-spinning");
+      els.spinBtn.textContent = "START";
+      els.status.textContent = "당첨자 확인 중…"; // a11y: spin ended; don't leave "추첨 중…" announced
+      // Reveal beat: spotlight the wedge the wheel landed on — the pointer sits over
+      // it, making "휠이 멈춘 칸 == 당첨자" visible — then pop the modal. Hold the lock
+      // across the beat so the pending winner can't be deleted before it's recorded.
+      isRevealing = true;
+      wheel.setHighlight(result.winner.id);
+      const beat = reduceMotion() ? 150 : 700;
+      window.setTimeout(() => {
+        isRevealing = false;
+        onWin(result.winner.id, prize.id);
+      }, beat);
+    },
   });
 }
 
@@ -295,7 +324,7 @@ function onWin(winnerId: string, prizeId: string) {
   persist();
 
   if (state.settings.sound) playFanfare();
-  fireConfetti();
+  if (!reduceMotion()) fireConfetti();
 
   els.winnerName.textContent = winner.name;
   els.winnerPrize.textContent = prize.name;
@@ -310,6 +339,7 @@ function onWin(winnerId: string, prizeId: string) {
 function closeOverlayAndAdvance() {
   if (els.overlay.hidden) return;
   els.overlay.hidden = true;
+  wheel.setHighlight(null); // drop the reveal spotlight before rebuilding
   rebuildWheel();
   syncControls();
   if (!els.spinBtn.disabled) els.spinBtn.focus(); // restore focus to the wheel control
@@ -479,6 +509,7 @@ els.resetSession.addEventListener("click", () => {
   }
   state.records = [];
   els.overlay.hidden = true;
+  wheel.setHighlight(null); // drop any lingering reveal spotlight before rebuilding
   closeResult(); // result modal may hold now-stale roster/records
   persist();
   renderAll();
