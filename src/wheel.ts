@@ -103,6 +103,12 @@ export interface WheelHandle {
   render(): void;
   /** Animate from the current rotation to `targetRotation` over `durationMs`. */
   spinTo(targetRotation: number, durationMs: number, opts?: SpinOptions): void;
+  /**
+   * Spotlight one participant's wedge (full color + accent ring) and dim the rest.
+   * Pass `null` to clear. Purely a render hint — never touches rotation or the
+   * fairness result path. Used for the post-spin reveal beat.
+   */
+  setHighlight(participantId: string | null): void;
   getRotation(): number;
   isSpinning(): boolean;
   stop(): void;
@@ -123,6 +129,7 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
   let rotation = 0;
   let rafId = 0;
   let spinning = false;
+  let highlightId: string | null = null;
 
   function sizeToBox(): { cx: number; cy: number; radius: number } {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -202,6 +209,11 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
       const ci = colorOf.get(w.participant.id)! % PALETTE.length;
       const a0 = w.start - HALF_PI;
       const a1 = w.end - HALF_PI;
+      // Reveal beat: spotlight the winner's wedge, dim the rest. Render-only —
+      // identity match, never angle math (fairness convention untouched).
+      const isWinner = highlightId !== null && w.participant.id === highlightId;
+      const dim = highlightId !== null && !isWinner;
+      ctx.globalAlpha = dim ? 0.3 : 1;
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.arc(0, 0, radius, a0, a1);
@@ -211,12 +223,21 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
       ctx.lineWidth = 2;
       ctx.strokeStyle = "rgba(255,255,255,0.7)";
       ctx.stroke();
+      if (isWinner) {
+        // Accent ring on the winning wedge — ink outline at full opacity.
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = INK;
+        ctx.stroke();
+      }
 
       // Label sized to the wedge's own arc (one wedge per person now), so wide
       // wedges get big, projector-readable names. Skip only when a wedge is too
       // thin for any legible text.
       const arc = w.end - w.start;
-      if (arc < 0.05) return;
+      if (arc < 0.05) {
+        ctx.globalAlpha = 1;
+        return;
+      }
       const fontPx = Math.max(13, Math.min(radius * 0.13, radius * 0.16 * Math.min(1, arc / 0.5)));
       // Radial label: text runs along the wedge's mid-radius and rotates rigidly
       // with the wheel. No rotation-dependent flip → no mid-spin 180° snap (the
@@ -229,6 +250,7 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
       ctx.font = `400 ${fontPx}px "Black Han Sans", "Pretendard Variable", system-ui, sans-serif`;
       ctx.fillText(truncate(w.participant.name, 12), rLabel, 0);
       ctx.restore();
+      ctx.globalAlpha = 1;
     });
 
     ctx.restore();
@@ -242,6 +264,7 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
 
   function spinTo(targetRotation: number, durationMs: number, opts: SpinOptions = {}) {
     cancelAnimationFrame(rafId);
+    highlightId = null; // a new spin clears any prior reveal spotlight
     const r0 = norm(rotation);
     rotation = r0;
     let target = targetRotation;
@@ -275,6 +298,10 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
     },
     render,
     spinTo,
+    setHighlight(id) {
+      highlightId = id;
+      render();
+    },
     getRotation: () => rotation,
     isSpinning: () => spinning,
     stop() {

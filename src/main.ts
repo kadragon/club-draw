@@ -16,6 +16,10 @@ import { createWheel } from "./wheel.js";
 
 const TWO_PI = Math.PI * 2;
 
+/** Honor the OS "reduce motion" setting — compress visuals only, never the result. */
+const reduceMotion = (): boolean =>
+  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 const state: AppState = loadState();
@@ -257,13 +261,18 @@ function spin() {
   const target = computeTargetRotation(result.wheel, result.index, turns, frac);
 
   els.spinBtn.disabled = true;
+  els.spinBtn.classList.add("is-spinning");
+  els.spinBtn.textContent = "…";
   els.status.textContent = "추첨 중…";
 
   let lastPhase = -1;
   let lastTickAt = 0;
   const seg = TWO_PI / Math.max(1, result.wheel.totalSlots);
 
-  wheel.spinTo(target, state.settings.spinMs, {
+  // reduce-motion: keep the full result path, just collapse the animation to a beat.
+  const spinMs = reduceMotion() ? 1 : state.settings.spinMs;
+
+  wheel.spinTo(target, spinMs, {
     onTick: () => {
       if (!state.settings.sound) return;
       const phase = Math.floor(wheel.getRotation() / seg);
@@ -274,7 +283,15 @@ function spin() {
         lastTickAt = now;
       }
     },
-    onDone: () => onWin(result.winner.id, prize.id),
+    onDone: () => {
+      els.spinBtn.classList.remove("is-spinning");
+      els.spinBtn.textContent = "START";
+      // Reveal beat: spotlight the wedge the wheel landed on — the pointer sits over
+      // it, making "휠이 멈춘 칸 == 당첨자" visible — then pop the modal.
+      wheel.setHighlight(result.winner.id);
+      const beat = reduceMotion() ? 150 : 700;
+      window.setTimeout(() => onWin(result.winner.id, prize.id), beat);
+    },
   });
 }
 
@@ -295,7 +312,7 @@ function onWin(winnerId: string, prizeId: string) {
   persist();
 
   if (state.settings.sound) playFanfare();
-  fireConfetti();
+  if (!reduceMotion()) fireConfetti();
 
   els.winnerName.textContent = winner.name;
   els.winnerPrize.textContent = prize.name;
@@ -310,6 +327,7 @@ function onWin(winnerId: string, prizeId: string) {
 function closeOverlayAndAdvance() {
   if (els.overlay.hidden) return;
   els.overlay.hidden = true;
+  wheel.setHighlight(null); // drop the reveal spotlight before rebuilding
   rebuildWheel();
   syncControls();
   if (!els.spinBtn.disabled) els.spinBtn.focus(); // restore focus to the wheel control
