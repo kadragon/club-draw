@@ -88,9 +88,15 @@ function rebuildWheel() {
  * the draw invariant) and can strand the UI. Mutating handlers no-op until the
  * spin settles. Pure-settings (spin time, sound) and stage/overlay navigation stay
  * live — they never change wheel geometry or the in-flight prize.
+ *
+ * `isRevealing` extends the lock across the post-spin reveal beat: `spinTo` flips
+ * `spinning` to false the instant the animation lands, but the winner isn't
+ * persisted until `onWin` fires after the beat delay. Without this, a delete/reset/
+ * import in that window could drop the pending winner before it's recorded.
  */
+let isRevealing = false;
 function spinLocked(): boolean {
-  return wheel.isSpinning();
+  return wheel.isSpinning() || isRevealing;
 }
 
 // ── Rendering ───────────────────────────────────────────────────────────────
@@ -286,11 +292,17 @@ function spin() {
     onDone: () => {
       els.spinBtn.classList.remove("is-spinning");
       els.spinBtn.textContent = "START";
+      els.status.textContent = "당첨자 확인 중…"; // a11y: spin ended; don't leave "추첨 중…" announced
       // Reveal beat: spotlight the wedge the wheel landed on — the pointer sits over
-      // it, making "휠이 멈춘 칸 == 당첨자" visible — then pop the modal.
+      // it, making "휠이 멈춘 칸 == 당첨자" visible — then pop the modal. Hold the lock
+      // across the beat so the pending winner can't be deleted before it's recorded.
+      isRevealing = true;
       wheel.setHighlight(result.winner.id);
       const beat = reduceMotion() ? 150 : 700;
-      window.setTimeout(() => onWin(result.winner.id, prize.id), beat);
+      window.setTimeout(() => {
+        isRevealing = false;
+        onWin(result.winner.id, prize.id);
+      }, beat);
     },
   });
 }
@@ -497,6 +509,7 @@ els.resetSession.addEventListener("click", () => {
   }
   state.records = [];
   els.overlay.hidden = true;
+  wheel.setHighlight(null); // drop any lingering reveal spotlight before rebuilding
   closeResult(); // result modal may hold now-stale roster/records
   persist();
   renderAll();
