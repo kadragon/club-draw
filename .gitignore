@@ -3,3 +3,13 @@ dist
 .wrangler
 .DS_Store
 *.log
+.playwright-mcp
+/initial.png
+/completed.png
+/winner-overlay.png
+/fairness-collapsed.png
+/fairness-full.png
+/fairness-open.png
+/layout-16x9.png
+/layout-4x3.png
+/pointer-check.png

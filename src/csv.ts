@@ -6,35 +6,66 @@ export interface RosterRow {
   cumulativeWins: number;
 }
 
-/** Split a single CSV line into fields, honoring double-quoted fields with `""` escapes. */
-function splitCsvLine(line: string): string[] {
-  const out: string[] = [];
+/** Leading characters Excel/Sheets treat as a formula — neutralized on export. */
+const FORMULA_LEAD = /^[=+\-@\t\r]/;
+
+/**
+ * Parse CSV text into rows of fields. RFC-4180-ish: double-quoted fields may
+ * contain commas, quotes (escaped as `""`) and newlines; unquoted newlines end
+ * a record. Handling quoted newlines here (vs. naive line-splitting) keeps the
+ * export → import roundtrip lossless for any field content.
+ */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
   let field = "";
   let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i]!;
+  let i = 0;
+  while (i < text.length) {
+    const c = text[i]!;
     if (inQuotes) {
       if (c === '"') {
-        if (line[i + 1] === '"') {
+        if (text[i + 1] === '"') {
           field += '"';
-          i++;
-        } else {
-          inQuotes = false;
+          i += 2;
+          continue;
         }
-      } else {
-        field += c;
+        inQuotes = false;
+        i++;
+        continue;
       }
-    } else if (c === '"') {
+      field += c;
+      i++;
+      continue;
+    }
+    if (c === '"') {
       inQuotes = true;
+      i++;
     } else if (c === ",") {
-      out.push(field);
+      row.push(field);
       field = "";
+      i++;
+    } else if (c === "\r") {
+      if (text[i + 1] === "\n") i++;
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      i++;
+    } else if (c === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      i++;
     } else {
       field += c;
+      i++;
     }
   }
-  out.push(field);
-  return out;
+  row.push(field);
+  rows.push(row);
+  return rows;
 }
 
 /** Quote a CSV field if it contains a comma, quote, or newline. */
@@ -45,24 +76,35 @@ function csvField(value: string): string {
   return value;
 }
 
-const HEADER_RE = /^\s*name\s*(,|$)/i;
+/** Neutralize CSV formula injection, then quote. The guard is reversed by {@link unguard}. */
+function guardField(value: string): string {
+  return csvField(FORMULA_LEAD.test(value) ? `'${value}` : value);
+}
+
+/** Reverse {@link guardField}: drop a leading apostrophe only when it shields a formula char. */
+function unguard(value: string): string {
+  if (value[0] === "'" && FORMULA_LEAD.test(value.slice(1))) return value.slice(1);
+  return value;
+}
+
+const HEADER_RE = /^\s*name\s*$/i;
 
 /**
  * Parse a pasted roster or imported CSV into rows.
  *
- * Accepts one entry per line as `name` or `name,cumulativeWins`. Blank lines are
- * skipped; a leading `name[,...]` header line is ignored. A missing or non-numeric
- * cumulative value defaults to 0.
+ * Accepts one entry per record as `name` or `name,cumulativeWins`. Blank records
+ * are skipped; a leading `name[,...]` header is ignored. Missing/non-numeric/negative
+ * cumulative values default to 0. A formula-guard apostrophe (see export) is reversed.
  */
 export function parseRoster(text: string): RosterRow[] {
   const rows: RosterRow[] = [];
-  const lines = text.split(/\r\n|\r|\n/);
-  for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i]!;
-    if (raw.trim() === "") continue;
-    if (i === 0 && HEADER_RE.test(raw)) continue;
-    const fields = splitCsvLine(raw);
-    const name = (fields[0] ?? "").trim();
+  const records = parseCsv(text);
+  for (let r = 0; r < records.length; r++) {
+    const fields = records[r]!;
+    const rawName = (fields[0] ?? "").trim();
+    if (rawName === "" && (fields[1] ?? "").trim() === "") continue; // blank record
+    if (r === 0 && HEADER_RE.test(fields[0]?.trim() ?? "")) continue; // header row
+    const name = unguard(rawName).trim();
     if (name === "") continue;
     const n = Number((fields[1] ?? "").trim());
     rows.push({ name, cumulativeWins: Number.isFinite(n) && n > 0 ? Math.floor(n) : 0 });
@@ -70,20 +112,20 @@ export function parseRoster(text: string): RosterRow[] {
   return rows;
 }
 
-/** Serialize participants to CSV with a header row. */
+/** Serialize participants to CSV with a header row (formula-guarded, roundtrip-safe). */
 export function participantsToCSV(participants: readonly Participant[]): string {
   const lines = ["name,cumulativeWins"];
   for (const p of participants) {
-    lines.push(`${csvField(p.name)},${p.cumulativeWins}`);
+    lines.push(`${guardField(p.name)},${Math.max(0, p.cumulativeWins)}`);
   }
   return lines.join("\n");
 }
 
-/** Serialize draw records to CSV with a header row. */
+/** Serialize draw records to CSV with a header row (formula-guarded). */
 export function recordsToCSV(records: readonly DrawRecord[]): string {
   const lines = ["prize,winner,at"];
   for (const r of records) {
-    lines.push(`${csvField(r.prize)},${csvField(r.winner)},${csvField(r.at)}`);
+    lines.push(`${guardField(r.prize)},${guardField(r.winner)},${guardField(r.at)}`);
   }
   return lines.join("\n");
 }

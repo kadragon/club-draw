@@ -1,0 +1,99 @@
+import { describe, expect, it } from "vitest";
+import { parseRoster, participantsToCSV, recordsToCSV } from "../src/csv.js";
+import type { DrawRecord, Participant } from "../src/types.js";
+
+describe("parseRoster", () => {
+  it("parses name-only and name,cumulative lines", () => {
+    expect(parseRoster("Alice\nBob,2\nCarol, 3")).toEqual([
+      { name: "Alice", cumulativeWins: 0 },
+      { name: "Bob", cumulativeWins: 2 },
+      { name: "Carol", cumulativeWins: 3 },
+    ]);
+  });
+
+  it("skips blank lines and trims whitespace", () => {
+    expect(parseRoster("  Alice  \n\n   \n Bob , 1 ")).toEqual([
+      { name: "Alice", cumulativeWins: 0 },
+      { name: "Bob", cumulativeWins: 1 },
+    ]);
+  });
+
+  it("ignores a leading header row", () => {
+    expect(parseRoster("name,cumulativeWins\nAlice,1")).toEqual([
+      { name: "Alice", cumulativeWins: 1 },
+    ]);
+  });
+
+  it("defaults non-numeric or negative cumulative to 0", () => {
+    expect(parseRoster("Alice,foo\nBob,-4")).toEqual([
+      { name: "Alice", cumulativeWins: 0 },
+      { name: "Bob", cumulativeWins: 0 },
+    ]);
+  });
+
+  it("handles CRLF line endings", () => {
+    expect(parseRoster("Alice,1\r\nBob,2")).toEqual([
+      { name: "Alice", cumulativeWins: 1 },
+      { name: "Bob", cumulativeWins: 2 },
+    ]);
+  });
+});
+
+describe("CSV roundtrip", () => {
+  const participants: Participant[] = [
+    { id: "1", name: "Alice", cumulativeWins: 0 },
+    { id: "2", name: "Bob, Jr.", cumulativeWins: 3 }, // comma forces quoting
+    { id: "3", name: 'Eve "the win"', cumulativeWins: 1 }, // quote escaping
+  ];
+
+  it("participantsToCSV -> parseRoster preserves name and cumulative", () => {
+    const csv = participantsToCSV(participants);
+    const back = parseRoster(csv);
+    expect(back).toEqual(
+      participants.map((p) => ({ name: p.name, cumulativeWins: p.cumulativeWins })),
+    );
+  });
+
+  it("quotes fields containing commas", () => {
+    const csv = participantsToCSV(participants);
+    expect(csv).toContain('"Bob, Jr.",3');
+  });
+
+  it("roundtrips a name containing an embedded newline", () => {
+    const ps: Participant[] = [{ id: "1", name: "Alice\nBob", cumulativeWins: 2 }];
+    expect(parseRoster(participantsToCSV(ps))).toEqual([{ name: "Alice\nBob", cumulativeWins: 2 }]);
+  });
+});
+
+describe("CSV formula injection (export hardening)", () => {
+  it("prefixes a guard apostrophe on export and reverses it on import", () => {
+    const ps: Participant[] = [{ id: "1", name: "=SUM(A1)", cumulativeWins: 0 }];
+    const csv = participantsToCSV(ps);
+    expect(csv).toContain("'=SUM(A1)");
+    expect(parseRoster(csv)).toEqual([{ name: "=SUM(A1)", cumulativeWins: 0 }]);
+  });
+
+  it("guards record export fields starting with = + - @", () => {
+    const csv = recordsToCSV([{ prize: "@cmd", winner: "-2+3", at: "2026-01-01" }]);
+    expect(csv.split("\n")[1]).toBe("'@cmd,'-2+3,2026-01-01");
+  });
+
+  it("leaves a legitimate apostrophe name untouched", () => {
+    const ps: Participant[] = [{ id: "1", name: "'tis Bob", cumulativeWins: 0 }];
+    expect(parseRoster(participantsToCSV(ps))).toEqual([{ name: "'tis Bob", cumulativeWins: 0 }]);
+  });
+});
+
+describe("recordsToCSV", () => {
+  it("emits a header and one row per record", () => {
+    const records: DrawRecord[] = [
+      { prize: "1st", winner: "Alice", at: "2026-06-02T00:00:00.000Z" },
+      { prize: "2nd, special", winner: "Bob", at: "2026-06-02T00:01:00.000Z" },
+    ];
+    const csv = recordsToCSV(records);
+    const lines = csv.split("\n");
+    expect(lines[0]).toBe("prize,winner,at");
+    expect(lines).toHaveLength(3);
+    expect(lines[2]).toBe('"2nd, special",Bob,2026-06-02T00:01:00.000Z');
+  });
+});

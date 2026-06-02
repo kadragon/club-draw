@@ -17,7 +17,7 @@ export function randomBelow(n: number, rng: RandomSource = defaultRng): number {
   if (!Number.isInteger(n) || n <= 0) {
     throw new RangeError(`randomBelow: n must be a positive integer, got ${n}`);
   }
-  const max = Math.floor(0xffffffff / n) * n;
+  const max = Math.floor(0x100000000 / n) * n; // 2^32; accept region is a multiple of n (no bias)
   const buf = new Uint32Array(1);
   let x: number;
   do {
@@ -39,7 +39,8 @@ export function candidatesFrom(participants: readonly Participant[]): Participan
 
 /**
  * Build the wheel layout. Each candidate gets one wedge whose arc is proportional
- * to its slots. Wedges are laid out in input order, clockwise from the top pointer.
+ * to its slots (more odds = a wider wedge). Wedges are laid out in input order,
+ * clockwise from the top pointer.
  */
 export function buildWheel(candidates: readonly Participant[], baseSlots: number): Wheel {
   const TWO_PI = Math.PI * 2;

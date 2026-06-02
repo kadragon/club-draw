@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>동호회 추첨 · Club Draw</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23533afd'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%23fff'/%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <!-- Body: Pretendard Variable (dynamic subset). Emphasis: Black Han Sans. -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="mesh" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <span class="brand-name">Club&nbsp;Draw</span>
+        <span class="eyebrow">공정한 현장 추첨</span>
+      </div>
+      <button id="enter-stage" class="btn btn-primary setup-only" type="button">추첨 시작 ▶</button>
+    </header>
+
+    <main class="layout">
+      <!-- LEFT: setup -->
+      <aside class="panel panel-left">
+        <section class="card">
+          <h2 class="card-title">참가자</h2>
+          <form id="participant-form" class="row-form">
+            <input
+              id="p-name"
+              class="input"
+              type="text"
+              placeholder="이름"
+              autocomplete="off"
+              aria-label="참가자 이름"
+            />
+            <input
+              id="p-wins"
+              class="input input-num"
+              type="number"
+              min="0"
+              value="0"
+              title="누적 당첨 (과거 이월)"
+              aria-label="누적 당첨 횟수"
+            />
+            <button class="btn btn-primary" type="submit">추가</button>
+          </form>
+          <ul id="participant-list" class="list"></ul>
+          <details class="import">
+            <summary>명단 붙여넣기 / CSV 가져오기</summary>
+            <textarea
+              id="roster-text"
+              class="textarea"
+              rows="5"
+              placeholder="한 줄에 한 명&#10;홍길동&#10;김철수,2"
+            ></textarea>
+            <div class="import-actions">
+              <button id="roster-apply" class="btn btn-secondary" type="button">명단 추가</button>
+              <label class="btn btn-secondary file-btn">
+                CSV 파일
+                <input id="roster-file" type="file" accept=".csv,text/csv" hidden />
+              </label>
+            </div>
+          </details>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">상품</h2>
+          <form id="prize-form" class="row-form">
+            <input id="z-name" class="input" type="text" placeholder="상품명 (추첨 순서대로)" autocomplete="off" aria-label="상품명" />
+            <button class="btn btn-primary" type="submit">추가</button>
+          </form>
+          <ol id="prize-list" class="list list-ordered"></ol>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">설정</h2>
+          <label class="field">
+            <span>기본 칸 수 (base)</span>
+            <input id="s-base" class="input input-num" type="number" min="1" max="50" />
+          </label>
+          <label class="field">
+            <span>회전 시간 (초)</span>
+            <input id="s-spin" class="input input-num" type="number" min="1" max="20" step="0.5" />
+          </label>
+          <label class="field field-row">
+            <input id="s-sound" type="checkbox" />
+            <span>사운드 효과</span>
+          </label>
+          <p class="hint">칸 수 = max(1, base − 누적당첨). 큰 칸 = 높은 확률.</p>
+        </section>
+      </aside>
+
+      <!-- CENTER: wheel -->
+      <section class="panel panel-center">
+        <div class="now-drawing">
+          <span class="eyebrow">현재 추첨</span>
+          <h1 id="current-prize" class="now-title">상품을 추가하세요</h1>
+          <p id="progress" class="progress-text"></p>
+        </div>
+        <div class="wheel-wrap">
+          <canvas id="wheel" class="wheel" width="480" height="480"></canvas>
+          <button id="spin-btn" class="spin-btn" type="button" disabled>START</button>
+        </div>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+
+        <div class="center-actions">
+          <button id="fairness-btn" class="btn btn-ghost fairness-trigger" type="button">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path
+                d="M12 2 4 5v6c0 5 3.4 8.3 8 11 4.6-2.7 8-6 8-11V5l-8-3Z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linejoin="round"
+              />
+              <path
+                d="m8.5 12 2.4 2.4L16 9.3"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            공정성 검증
+          </button>
+          <button id="exit-stage" class="btn btn-ghost stage-only" type="button">← 셋업으로</button>
+        </div>
+      </section>
+
+      <!-- RIGHT: history -->
+      <aside class="panel panel-right">
+        <section class="card card-grow">
+          <div class="card-head">
+            <h2 class="card-title">당첨 기록</h2>
+            <button id="export-csv" class="btn btn-secondary btn-sm" type="button">CSV 내보내기</button>
+          </div>
+          <ol id="record-list" class="records"></ol>
+        </section>
+        <button id="reset-session" class="btn btn-ghost btn-sm" type="button">세션 초기화</button>
+      </aside>
+    </main>
+
+    <div
+      id="winner-overlay"
+      class="overlay"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="winner-name"
+      aria-describedby="winner-prize"
+      hidden
+    >
+      <div class="overlay-card">
+        <span class="eyebrow">당첨</span>
+        <p id="winner-name" class="winner-name"></p>
+        <p id="winner-prize" class="winner-prize"></p>
+        <button id="winner-next" class="btn btn-primary" type="button">다음 상품</button>
+      </div>
+    </div>
+
+    <div
+      id="fairness-overlay"
+      class="overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="fairness-title"
+      hidden
+    >
+      <div class="overlay-card fairness-card">
+        <button id="fairness-close" class="overlay-close" type="button" aria-label="닫기">×</button>
+        <span class="eyebrow">수학적으로 검증된 공정성</span>
+        <h2 id="fairness-title" class="fairness-title">편향 0, 설계로 증명</h2>
+        <p class="fairness-lead">
+          모든 후보의 당첨 확률은 칸 수에 <strong>정확히</strong> 비례합니다. 코드와 난수
+          생성기 어디에도 미세한 치우침이 없도록 설계했습니다.
+        </p>
+
+        <ul class="fairness-points">
+          <li>
+            <span class="fp-key">암호학적 난수</span>
+            <span class="fp-val">브라우저 <code>crypto.getRandomValues</code> (CSPRNG) — 예측·재현 불가</span>
+          </li>
+          <li>
+            <span class="fp-key">모듈러 편향 0</span>
+            <span class="fp-val"
+              >Rejection sampling: 2³² 범위에서 칸 수의 배수를 초과하는 끝부분을 버려, 모든
+              결과가 정확히 같은 확률</span
+            >
+          </li>
+          <li>
+            <span class="fp-key">투명한 가중치</span>
+            <span class="fp-val">당첨 확률 = 내 칸 수 ÷ 전체 칸 수, 칸 수 = max(1, base − 누적당첨)</span>
+          </li>
+          <li>
+            <span class="fp-key">회전과 무관</span>
+            <span class="fp-val">당첨자는 먼저 정해지고, 휠은 그 결과를 보여줄 뿐 — 연출이 결과를 바꾸지 않음</span>
+          </li>
+        </ul>
+
+        <div class="fairness-stats">
+          <div class="fstat">
+            <span class="fstat-num">2³²</span>
+            <span class="fstat-cap">난수 공간</span>
+          </div>
+          <div class="fstat">
+            <span class="fstat-num">0</span>
+            <span class="fstat-cap">모듈러 편향</span>
+          </div>
+          <div class="fstat">
+            <span class="fstat-num">60k</span>
+            <span class="fstat-cap">샘플 균등성 검증</span>
+          </div>
+          <div class="fstat">
+            <span class="fstat-num">45 ✓</span>
+            <span class="fstat-cap">통과한 테스트</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
