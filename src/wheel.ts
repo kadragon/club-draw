@@ -40,8 +40,11 @@ const linear = (c: number): number => {
 const { PALETTE, LABEL_INK } = ((): { PALETTE: string[]; LABEL_INK: string[] } => {
   const fills: string[] = [];
   const inks: string[] = [];
-  const sat = [0.72, 0.66, 0.8];
-  const light = [0.5, 0.59, 0.43];
+  // Pastel contract: keep `light` ≥ ~0.78 so every wedge's computed luminance
+  // stays > 0.5 below and LABEL_INK resolves to dark ink. Darkening the palette
+  // flips some labels to white — re-check label legibility if you retune these.
+  const sat = [0.55, 0.48, 0.6];
+  const light = [0.82, 0.86, 0.78];
   for (let k = 0; k < 30; k++) {
     const [r, g, b] = hslToRgb(((k * 137.508) % 360) / 360, sat[k % 3]!, light[k % 3]!);
     fills.push(`#${hex2(r)}${hex2(g)}${hex2(b)}`);

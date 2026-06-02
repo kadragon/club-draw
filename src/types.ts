@@ -32,6 +32,8 @@ export interface Settings {
 export interface DrawRecord {
   prize: string;
   winner: string;
+  /** Winning participant's stable id; disambiguates duplicate display names. */
+  winnerId?: string;
   /** ISO timestamp, stamped after the spin resolves. */
   at: string;
 }

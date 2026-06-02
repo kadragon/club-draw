@@ -71,6 +71,7 @@ export function loadState(): AppState {
       ? (data.records as unknown[]).filter(isObj).map((r) => ({
           prize: String(r.prize ?? ""),
           winner: String(r.winner ?? ""),
+          winnerId: r.winnerId ? String(r.winnerId) : undefined,
           at: String(r.at ?? ""),
         }))
       : [];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseRoster, participantsToCSV, recordsToCSV } from "../src/csv.js";
+import { mergeSessionWins, parseRoster, participantsToCSV, recordsToCSV } from "../src/csv.js";
 import type { DrawRecord, Participant } from "../src/types.js";
 
 describe("parseRoster", () => {
@@ -95,5 +95,55 @@ describe("recordsToCSV", () => {
     expect(lines[0]).toBe("prize,winner,at");
     expect(lines).toHaveLength(3);
     expect(lines[2]).toBe('"2nd, special",Bob,2026-06-02T00:01:00.000Z');
+  });
+});
+
+describe("mergeSessionWins", () => {
+  const participants: Participant[] = [
+    { id: "1", name: "Alice", cumulativeWins: 2 },
+    { id: "2", name: "Bob", cumulativeWins: 0 },
+    { id: "3", name: "Carol", cumulativeWins: 1 },
+  ];
+  const rec = (winner: string): DrawRecord => ({ prize: "p", winner, at: "2026-06-02" });
+
+  it("adds session wins to matching participant by name", () => {
+    const merged = mergeSessionWins(participants, [rec("Alice")]);
+    expect(merged.find((p) => p.name === "Alice")?.cumulativeWins).toBe(3);
+  });
+
+  it("accumulates multiple wins for the same person", () => {
+    const merged = mergeSessionWins(participants, [rec("Bob"), rec("Bob"), rec("Bob")]);
+    expect(merged.find((p) => p.name === "Bob")?.cumulativeWins).toBe(3);
+  });
+
+  it("keeps existing cumulative for participants with no session wins", () => {
+    const merged = mergeSessionWins(participants, [rec("Alice")]);
+    expect(merged.find((p) => p.name === "Carol")?.cumulativeWins).toBe(1);
+  });
+
+  it("does not mutate the input participants", () => {
+    mergeSessionWins(participants, [rec("Alice"), rec("Bob")]);
+    expect(participants.map((p) => p.cumulativeWins)).toEqual([2, 0, 1]);
+  });
+
+  it("ignores records whose winner matches no participant", () => {
+    const merged = mergeSessionWins(participants, [rec("Unknown")]);
+    expect(merged.map((p) => p.cumulativeWins)).toEqual([2, 0, 1]);
+  });
+
+  it("credits only the winning participant when names collide (by winnerId)", () => {
+    const dupes: Participant[] = [
+      { id: "a", name: "Bob", cumulativeWins: 0 },
+      { id: "b", name: "Bob", cumulativeWins: 0 },
+    ];
+    const recId = (winnerId: string, winner: string): DrawRecord => ({
+      prize: "p",
+      winner,
+      winnerId,
+      at: "2026-06-02",
+    });
+    const merged = mergeSessionWins(dupes, [recId("a", "Bob")]);
+    expect(merged.find((p) => p.id === "a")?.cumulativeWins).toBe(1);
+    expect(merged.find((p) => p.id === "b")?.cumulativeWins).toBe(0);
   });
 });

@@ -121,6 +121,29 @@ export function participantsToCSV(participants: readonly Participant[]): string 
   return lines.join("\n");
 }
 
+/**
+ * Merge this session's wins into each participant's carry-over total — returns a
+ * NEW array, input untouched. Wins match a participant by stable id (falling back
+ * to exact name for legacy records lacking winnerId), so duplicate display names
+ * each get only their own wins. Used to produce the next-round roster for display;
+ * never persisted (the cumulative invariant: it stays an operator-entered
+ * carry-over, not an auto-increment).
+ */
+export function mergeSessionWins(
+  participants: readonly Participant[],
+  records: readonly DrawRecord[],
+): Participant[] {
+  const wins = new Map<string, number>();
+  for (const r of records) {
+    const key = r.winnerId ?? r.winner;
+    wins.set(key, (wins.get(key) ?? 0) + 1);
+  }
+  return participants.map((p) => ({
+    ...p,
+    cumulativeWins: Math.max(0, p.cumulativeWins) + (wins.get(p.id) ?? wins.get(p.name) ?? 0),
+  }));
+}
+
 /** Serialize draw records to CSV with a header row (formula-guarded). */
 export function recordsToCSV(records: readonly DrawRecord[]): string {
   const lines = ["prize,winner,at"];

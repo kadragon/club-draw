@@ -1,6 +1,6 @@
 import "./style.css";
 import { fireConfetti } from "./confetti.js";
-import { parseRoster, recordsToCSV } from "./csv.js";
+import { mergeSessionWins, parseRoster, participantsToCSV, recordsToCSV } from "./csv.js";
 import {
   buildWheel,
   candidatesFrom,
@@ -52,6 +52,11 @@ const els = {
   fairnessBtn: $("fairness-btn") as HTMLButtonElement,
   fairnessOverlay: $("fairness-overlay"),
   fairnessClose: $("fairness-close") as HTMLButtonElement,
+  resultOverlay: $("result-overlay"),
+  resultRoster: $("result-roster") as HTMLPreElement,
+  resultRecords: $("result-records") as HTMLPreElement,
+  resultCopy: $("result-copy") as HTMLButtonElement,
+  resultClose: $("result-close") as HTMLButtonElement,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -281,7 +286,12 @@ function onWin(winnerId: string, prizeId: string) {
   winner.excluded = true; // session removal; cumulativeWins stays historical
   prize.drawn = true;
   prize.winnerId = winner.id;
-  state.records.push({ prize: prize.name, winner: winner.name, at: new Date().toISOString() });
+  state.records.push({
+    prize: prize.name,
+    winner: winner.name,
+    winnerId: winner.id,
+    at: new Date().toISOString(),
+  });
   persist();
 
   if (state.settings.sound) playFanfare();
@@ -418,23 +428,45 @@ els.fairnessOverlay.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (!els.fairnessOverlay.hidden) closeFairness();
+  else if (!els.resultOverlay.hidden) closeResult();
   else if (!els.overlay.hidden) closeOverlayAndAdvance();
 });
 
+// ── Result modal (updated roster + session records, copyable) ───────────────
+// The roster column folds this session's wins into each person's carry-over total
+// for DISPLAY only — state.participants.cumulativeWins is never auto-incremented
+// (operator-entered carry-over invariant). Operator copies it as the next round's
+// roster if they choose to.
+function closeResult() {
+  if (els.resultOverlay.hidden) return;
+  els.resultOverlay.hidden = true;
+  els.exportCsv.focus();
+}
 els.exportCsv.addEventListener("click", () => {
   if (state.records.length === 0) {
     els.status.textContent = "내보낼 기록이 없습니다.";
     return;
   }
-  const csv = recordsToCSV(state.records);
-  const blob = new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  a.href = url;
-  a.download = `club-draw-${stamp}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  els.resultRoster.textContent = participantsToCSV(
+    mergeSessionWins(state.participants, state.records),
+  );
+  els.resultRecords.textContent = recordsToCSV(state.records);
+  els.resultCopy.textContent = "명단 복사";
+  els.resultOverlay.hidden = false;
+  els.resultClose.focus();
+});
+els.resultClose.addEventListener("click", closeResult);
+els.resultOverlay.addEventListener("click", (e) => {
+  if (e.target === els.resultOverlay) closeResult(); // backdrop, not card
+});
+els.resultCopy.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(els.resultRoster.textContent ?? "");
+    els.resultCopy.textContent = "복사됨 ✓";
+  } catch (err) {
+    console.warn("clipboard write failed:", err);
+    els.resultCopy.textContent = "복사 실패";
+  }
 });
 
 els.resetSession.addEventListener("click", () => {
@@ -447,6 +479,7 @@ els.resetSession.addEventListener("click", () => {
   }
   state.records = [];
   els.overlay.hidden = true;
+  closeResult(); // result modal may hold now-stale roster/records
   persist();
   renderAll();
 });
