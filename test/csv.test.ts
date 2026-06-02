@@ -125,4 +125,25 @@ describe("mergeSessionWins", () => {
     mergeSessionWins(participants, [rec("Alice"), rec("Bob")]);
     expect(participants.map((p) => p.cumulativeWins)).toEqual([2, 0, 1]);
   });
+
+  it("ignores records whose winner matches no participant", () => {
+    const merged = mergeSessionWins(participants, [rec("Unknown")]);
+    expect(merged.map((p) => p.cumulativeWins)).toEqual([2, 0, 1]);
+  });
+
+  it("credits only the winning participant when names collide (by winnerId)", () => {
+    const dupes: Participant[] = [
+      { id: "a", name: "Bob", cumulativeWins: 0 },
+      { id: "b", name: "Bob", cumulativeWins: 0 },
+    ];
+    const recId = (winnerId: string, winner: string): DrawRecord => ({
+      prize: "p",
+      winner,
+      winnerId,
+      at: "2026-06-02",
+    });
+    const merged = mergeSessionWins(dupes, [recId("a", "Bob")]);
+    expect(merged.find((p) => p.id === "a")?.cumulativeWins).toBe(1);
+    expect(merged.find((p) => p.id === "b")?.cumulativeWins).toBe(0);
+  });
 });

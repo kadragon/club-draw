@@ -286,7 +286,12 @@ function onWin(winnerId: string, prizeId: string) {
   winner.excluded = true; // session removal; cumulativeWins stays historical
   prize.drawn = true;
   prize.winnerId = winner.id;
-  state.records.push({ prize: prize.name, winner: winner.name, at: new Date().toISOString() });
+  state.records.push({
+    prize: prize.name,
+    winner: winner.name,
+    winnerId: winner.id,
+    at: new Date().toISOString(),
+  });
   persist();
 
   if (state.settings.sound) playFanfare();
@@ -458,7 +463,8 @@ els.resultCopy.addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(els.resultRoster.textContent ?? "");
     els.resultCopy.textContent = "복사됨 ✓";
-  } catch {
+  } catch (err) {
+    console.warn("clipboard write failed:", err);
     els.resultCopy.textContent = "복사 실패";
   }
 });
@@ -473,6 +479,7 @@ els.resetSession.addEventListener("click", () => {
   }
   state.records = [];
   els.overlay.hidden = true;
+  closeResult(); // result modal may hold now-stale roster/records
   persist();
   renderAll();
 });

@@ -40,6 +40,9 @@ const linear = (c: number): number => {
 const { PALETTE, LABEL_INK } = ((): { PALETTE: string[]; LABEL_INK: string[] } => {
   const fills: string[] = [];
   const inks: string[] = [];
+  // Pastel contract: keep `light` ≥ ~0.78 so every wedge's computed luminance
+  // stays > 0.5 below and LABEL_INK resolves to dark ink. Darkening the palette
+  // flips some labels to white — re-check label legibility if you retune these.
   const sat = [0.55, 0.48, 0.6];
   const light = [0.82, 0.86, 0.78];
   for (let k = 0; k < 30; k++) {
