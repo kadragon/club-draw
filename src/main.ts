@@ -72,6 +72,18 @@ function rebuildWheel() {
   wheel.setWheel(cands.length ? buildWheel(cands, state.settings.baseSlots) : null);
 }
 
+/**
+ * While a spin animates, the wheel rotates toward a target computed from the
+ * geometry captured at spin start. Mutating candidates, base slots, or the prize/
+ * session mid-spin would desync the visible stop from the chosen winner (breaking
+ * the draw invariant) and can strand the UI. Mutating handlers no-op until the
+ * spin settles. Pure-settings (spin time, sound) and stage/overlay navigation stay
+ * live — they never change wheel geometry or the in-flight prize.
+ */
+function spinLocked(): boolean {
+  return wheel.isSpinning();
+}
+
 // ── Rendering ───────────────────────────────────────────────────────────────
 function renderParticipants() {
   els.pList.replaceChildren();
@@ -100,6 +112,7 @@ function renderParticipants() {
     del.textContent = "×";
     del.title = "삭제";
     del.onclick = () => {
+      if (spinLocked()) return;
       state.participants = state.participants.filter((x) => x.id !== p.id);
       persist();
       renderParticipants();
@@ -136,6 +149,7 @@ function renderPrizes() {
     del.textContent = "×";
     del.title = "삭제";
     del.onclick = () => {
+      if (spinLocked()) return;
       state.prizes = state.prizes.filter((x) => x.id !== z.id);
       persist();
       renderPrizes();
@@ -294,6 +308,7 @@ function closeOverlayAndAdvance() {
 // ── Events ──────────────────────────────────────────────────────────────────
 els.pForm.addEventListener("submit", (e) => {
   e.preventDefault();
+  if (spinLocked()) return;
   const name = els.pName.value.trim();
   if (!name) return;
   const wins = Math.max(0, Math.floor(Number(els.pWins.value) || 0));
@@ -309,6 +324,7 @@ els.pForm.addEventListener("submit", (e) => {
 
 els.zForm.addEventListener("submit", (e) => {
   e.preventDefault();
+  if (spinLocked()) return;
   const name = els.zName.value.trim();
   if (!name) return;
   state.prizes.push(makePrize(name));
@@ -320,6 +336,7 @@ els.zForm.addEventListener("submit", (e) => {
 });
 
 function applyRoster(text: string) {
+  if (spinLocked()) return; // guard the async FileReader path too, not just the call sites
   const rows = parseRoster(text);
   if (rows.length === 0) return;
   for (const row of rows) state.participants.push(makeParticipant(row.name, row.cumulativeWins));
@@ -342,6 +359,10 @@ els.rosterFile.addEventListener("change", () => {
 });
 
 els.sBase.addEventListener("change", () => {
+  if (spinLocked()) {
+    els.sBase.value = String(state.settings.baseSlots); // revert the input, ignore mid-spin edit
+    return;
+  }
   state.settings.baseSlots = Math.min(50, Math.max(1, Math.round(Number(els.sBase.value) || 5)));
   persist();
   syncControls();
@@ -417,6 +438,7 @@ els.exportCsv.addEventListener("click", () => {
 });
 
 els.resetSession.addEventListener("click", () => {
+  if (spinLocked()) return;
   if (!confirm("세션 당첨/기록을 초기화할까요? (참가자·상품·누적값은 유지)")) return;
   for (const p of state.participants) p.excluded = false;
   for (const z of state.prizes) {
