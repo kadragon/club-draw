@@ -22,17 +22,17 @@
 ## 개발
 
 ```bash
-npm install
-npm run dev        # Vite 개발 서버
-npm test           # Vitest (불변식·RNG·칸·CSV 테스트)
-npm run build      # tsc --noEmit + vite build → dist/
+bun install
+bun run dev        # Vite 개발 서버
+bun run test       # Vitest (불변식·RNG·칸·CSV 테스트)
+bun run build      # tsc --noEmit + vite build → dist/
 ```
 
 ## 배포 (Cloudflare Workers Static Assets)
 
 ```bash
-npm run cf:dev     # build 후 wrangler dev 로컬 확인
-npm run deploy     # build 후 wrangler deploy
+bun run cf:dev     # build 후 wrangler dev 로컬 확인
+bun run deploy     # build 후 wrangler deploy
 ```
 
 별도 Worker 스크립트 없이 `dist/`를 정적 자산으로 서빙한다(`wrangler.jsonc`의 `assets`).
