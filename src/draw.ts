@@ -27,6 +27,18 @@ export function randomBelow(n: number, rng: RandomSource = defaultRng): number {
   return x % n;
 }
 
+/**
+ * Auto base slot count derived from the roster: `max(cumulativeWins) + 1`.
+ *
+ * Anchors the wheel so the heaviest carry-over winner gets exactly 1 slot and a
+ * zero-wins participant gets the most — the largest fair handicap with no operator
+ * knob. Counts ALL participants (including session-excluded winners) so base stays
+ * a stable property of the roster across the session. Empty roster → 1.
+ */
+export function effectiveBaseSlots(participants: readonly Participant[]): number {
+  return participants.reduce((m, p) => Math.max(m, p.cumulativeWins), 0) + 1;
+}
+
 /** Slot count for a participant: `max(1, base - cumulativeWins)`. Floor of 1 keeps everyone in. */
 export function slotsFor(participant: Participant, baseSlots: number): number {
   return Math.max(1, baseSlots - participant.cumulativeWins);

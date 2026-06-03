@@ -9,7 +9,7 @@ export interface AppState {
 
 const KEY = "club-draw:v1";
 
-export const DEFAULT_SETTINGS: Settings = { baseSlots: 5, spinMs: 5000, sound: true };
+export const DEFAULT_SETTINGS: Settings = { spinMs: 5000, sound: true };
 
 export function defaultState(): AppState {
   return { participants: [], prizes: [], settings: { ...DEFAULT_SETTINGS }, records: [] };
@@ -53,12 +53,6 @@ export function loadState(): AppState {
         }))
       : [];
     const settings: Settings = {
-      baseSlots: clampInt(
-        Number((data.settings as Settings)?.baseSlots),
-        1,
-        50,
-        DEFAULT_SETTINGS.baseSlots,
-      ),
       spinMs: clampInt(
         Number((data.settings as Settings)?.spinMs),
         1000,

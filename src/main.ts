@@ -5,6 +5,7 @@ import {
   buildWheel,
   candidatesFrom,
   computeTargetRotation,
+  effectiveBaseSlots,
   randomBelow,
   selectWinner,
   type WinnerResult,
@@ -37,7 +38,6 @@ const els = {
   zForm: $("prize-form") as HTMLFormElement,
   zName: $("z-name") as HTMLInputElement,
   zList: $("prize-list"),
-  sBase: $("s-base") as HTMLInputElement,
   sSpin: $("s-spin") as HTMLInputElement,
   sSound: $("s-sound") as HTMLInputElement,
   currentPrize: $("current-prize"),
@@ -78,7 +78,7 @@ function liveCandidates() {
 
 function rebuildWheel() {
   const cands = liveCandidates();
-  wheel.setWheel(cands.length ? buildWheel(cands, state.settings.baseSlots) : null);
+  wheel.setWheel(cands.length ? buildWheel(cands, effectiveBaseSlots(state.participants)) : null);
 }
 
 /**
@@ -211,7 +211,6 @@ function formatTime(iso: string): string {
 }
 
 function syncControls() {
-  els.sBase.value = String(state.settings.baseSlots);
   els.sSpin.value = String(state.settings.spinMs / 1000);
   els.sSound.checked = state.settings.sound;
 
@@ -255,7 +254,7 @@ function spin() {
   const prize = currentPrize();
   if (!prize || wheel.isSpinning()) return;
 
-  const result = selectWinner(state.participants, state.settings.baseSlots);
+  const result = selectWinner(state.participants, effectiveBaseSlots(state.participants));
   if (!result) {
     syncControls();
     return;
@@ -398,16 +397,6 @@ els.rosterFile.addEventListener("change", () => {
   els.rosterFile.value = "";
 });
 
-els.sBase.addEventListener("change", () => {
-  if (spinLocked()) {
-    els.sBase.value = String(state.settings.baseSlots); // revert the input, ignore mid-spin edit
-    return;
-  }
-  state.settings.baseSlots = Math.min(50, Math.max(1, Math.round(Number(els.sBase.value) || 5)));
-  persist();
-  syncControls();
-  rebuildWheel();
-});
 els.sSpin.addEventListener("change", () => {
   state.settings.spinMs = Math.min(
     20000,

@@ -86,10 +86,6 @@
         <section class="card">
           <h2 class="card-title">설정</h2>
           <label class="field">
-            <span>기본 칸 수 (base)</span>
-            <input id="s-base" class="input input-num" type="number" min="1" max="50" />
-          </label>
-          <label class="field">
             <span>회전 시간 (초)</span>
             <input id="s-spin" class="input input-num" type="number" min="1" max="20" step="0.5" />
           </label>
@@ -97,7 +93,7 @@
             <input id="s-sound" type="checkbox" />
             <span>사운드 효과</span>
           </label>
-          <p class="hint">칸 수 = max(1, base − 누적당첨). 큰 칸 = 높은 확률.</p>
+          <p class="hint">칸 수 = max(1, (최대누적+1) − 누적당첨). 누적이 적을수록 칸이 커져 확률이 높아집니다.</p>
         </section>
       </aside>
 
@@ -220,11 +216,11 @@
           </li>
           <li>
             <span class="fp-key">투명한 가중치</span>
-            <span class="fp-val">당첨 확률 = 내 칸 수 ÷ 전체 칸 수, 칸 수 = max(1, base − 누적당첨)</span>
+            <span class="fp-val">당첨 확률 = 내 칸 수 ÷ 전체 칸 수, 칸 수 = max(1, (최대누적+1) − 누적당첨)</span>
           </li>
           <li>
-            <span class="fp-key">회전과 무관</span>
-            <span class="fp-val">당첨자는 먼저 정해지고, 휠은 그 결과를 보여줄 뿐 — 연출이 결과를 바꾸지 않음</span>
+            <span class="fp-key">중복 없는 추첨</span>
+            <span class="fp-val">당첨자는 이후 추첨에서 자동 제외 — 한 사람이 여러 상품을 독식할 수 없음</span>
           </li>
         </ul>
 
