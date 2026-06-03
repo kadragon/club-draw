@@ -26,6 +26,11 @@ function isObj(v: unknown): v is Record<string, unknown> {
 }
 
 /** Load persisted state, tolerating partial / legacy / corrupt payloads. */
+/**
+ * A legacy `baseSlots` key may exist in older `club-draw:v1` JSON; it is
+ * intentionally ignored (no migration). Base slots are always recomputed from
+ * the live roster via `effectiveBaseSlots`, never persisted.
+ */
 export function loadState(): AppState {
   const base = defaultState();
   try {

@@ -133,7 +133,9 @@ export function wedgeAtPointer(wheel: Wheel, rotation: number): number {
     const w = wheel.wedges[i]!;
     if (phi >= w.start && phi < w.end) return i;
   }
-  return wheel.wedges.length - 1; // phi === 2π edge → last wedge
+  // Unreachable: norm() yields [0, 2π) and the wedges are contiguous over that
+  // range, so some wedge always matches. Kept as an FP-safety fallback.
+  return wheel.wedges.length - 1;
 }
 
 /**
@@ -160,6 +162,10 @@ export function highlightState(
  * winner's arc (never the exact center) keeps repeated spins from looking canned,
  * while the pointer is guaranteed to remain inside the winner arc — the fairness
  * invariant holds regardless of `turns` or jitter.
+ *
+ * Callers must pass `turns >= 1`; with `turns = 0` the returned rotation can be
+ * less than the current angle, and `spinTo`'s `while (target <= r0 + Math.PI)`
+ * guard would silently add a revolution. Today every caller passes 4–6.
  *
  * @param fraction position within the arc in (0,1); default 0.5 (center).
  */
