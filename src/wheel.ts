@@ -91,6 +91,32 @@ function norm(a: number): number {
   return ((a % TWO_PI) + TWO_PI) % TWO_PI;
 }
 
+const prefersReducedMotion = (): boolean =>
+  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
+// ── Presentation-only motion (never touches the fairness angle convention) ───
+// Idle ambient drift: the wheel turns slowly while waiting so the stage feels
+// alive. A new spin reads the current rotation and lands exactly on the chosen
+// wedge regardless of where idle left it, so this can't desync the draw.
+const IDLE_SPEED = TWO_PI / 40000; // rad/ms — one slow revolution per ~40s
+
+// Pointer "peg" flap: each time a wedge edge passes under the pointer the flap
+// is kicked, then a damped spring pulls it back to rest. Kick scales with the
+// wheel's instantaneous speed, so ticks are punchy at full spin and fade out as
+// it crawls to a stop — purely a pointer-draw deflection, not a rotation change.
+const FLAP_K = 900; // spring stiffness (rad/s²)
+const FLAP_C = 45; // damping
+const FLAP_KICK = 1500; // speed(rad/ms) → velocity bump(rad/s)
+const FLAP_VMAX = 9; // clamp per-tick velocity bump
+const FLAP_MAX = 0.32; // ~18° max deflection
+
+// Winner reveal pulse: an expanding, fading ring on the winning wedge. One cycle
+// only — the winner modal opens ~700ms after the spin lands (the reveal beat), so
+// further cycles would repaint the whole canvas behind an opaque overlay where
+// they're never seen. Keep REVEAL_CYCLE_MS * REVEAL_CYCLES ≤ that beat.
+const REVEAL_CYCLE_MS = 600;
+const REVEAL_CYCLES = 1;
+
 export interface SpinOptions {
   /** Called every frame with the spin progress in [0,1]. */
   onTick?: (progress: number) => void;
@@ -109,6 +135,13 @@ export interface WheelHandle {
    * fairness result path. Used for the post-spin reveal beat.
    */
   setHighlight(participantId: string | null): void;
+  /**
+   * Start/stop the idle ambient drift (slow continuous rotation while waiting).
+   * Presentation only — a subsequent `spinTo` lands on the chosen wedge from any
+   * idle rotation, so this never affects the draw result. No-ops while spinning
+   * or when the wheel is empty.
+   */
+  setIdle(on: boolean): void;
   getRotation(): number;
   isSpinning(): boolean;
   stop(): void;
@@ -131,6 +164,16 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
   let spinning = false;
   let highlightId: string | null = null;
 
+  // Ambient/reveal motion state (presentation only — see constants above).
+  let idleRaf = 0;
+  let idleOn = false;
+  let idleLast = 0;
+  let revealRaf = 0;
+  let revealStart = 0;
+  let revealPulse = 0; // 0..1 ring emphasis, 0 = static
+  let flapAngle = 0; // pointer deflection (rad, ≥0)
+  let flapVel = 0;
+
   function sizeToBox(): { cx: number; cy: number; radius: number } {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const cssSize = canvas.clientWidth || 480;
@@ -148,19 +191,25 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
 
   function drawPointer(cx: number, cy: number, radius: number) {
     // Fixed pointer at the top (12 o'clock), aiming down into the wheel.
-    // White outline keeps it visible even over a dark wedge.
-    const tipY = cy - radius - 2;
-    const baseY = cy - radius + 24;
+    // White outline keeps it visible even over a dark wedge. The flap pivots at
+    // its mount (top center) and deflects by `flapAngle` as pegs pass — drawing
+    // only, never the wheel rotation, so the fairness convention is untouched.
+    const pivotY = cy - radius;
+    const apex = 26; // mount → tip length
+    ctx.save();
+    ctx.translate(cx, pivotY);
+    ctx.rotate(flapAngle);
     ctx.beginPath();
-    ctx.moveTo(cx - 17, tipY + 2);
-    ctx.lineTo(cx + 17, tipY + 2);
-    ctx.lineTo(cx, baseY);
+    ctx.moveTo(-17, 0);
+    ctx.lineTo(17, 0);
+    ctx.lineTo(0, apex);
     ctx.closePath();
     ctx.fillStyle = INK;
     ctx.fill();
     ctx.lineWidth = 3;
     ctx.strokeStyle = "#ffffff";
     ctx.stroke();
+    ctx.restore();
   }
 
   function drawHub(cx: number, cy: number) {
@@ -228,6 +277,16 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
         ctx.lineWidth = 4;
         ctx.strokeStyle = INK;
         ctx.stroke();
+        // Reveal pulse: an expanding outline that fades out, drawing the eye to
+        // the winner. `revealPulse` (0..1) is driven by the reveal RAF loop.
+        if (revealPulse > 0) {
+          ctx.save();
+          ctx.globalAlpha = (1 - revealPulse) * 0.55;
+          ctx.lineWidth = 3 + revealPulse * 12;
+          ctx.strokeStyle = INK;
+          ctx.stroke();
+          ctx.restore();
+        }
       }
 
       // Label sized to the wedge's own arc (one wedge per person now), so wide
@@ -262,8 +321,82 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
     return s.length > n ? `${s.slice(0, n - 1)}…` : s;
   }
 
+  /** Index of the wedge currently under the pointer (φ = −rotation), or −1. */
+  function wedgeIndexAt(rot: number): number {
+    if (!wheel) return -1;
+    const phi = norm(-rot);
+    const ws = wheel.wedges;
+    for (let i = 0; i < ws.length; i++) {
+      if (phi >= ws[i]!.start && phi < ws[i]!.end) return i;
+    }
+    return ws.length - 1; // wrap guard
+  }
+
+  /** Advance the flap spring one step (dt in ms); kick is an optional impulse. */
+  function stepFlap(dtMs: number, kick = 0) {
+    const s = dtMs / 1000;
+    flapVel += Math.min(kick, FLAP_VMAX);
+    flapVel += (-FLAP_K * flapAngle - FLAP_C * flapVel) * s;
+    flapAngle += flapVel * s;
+    if (flapAngle <= 0) {
+      flapAngle = 0;
+      if (flapVel < 0) flapVel = 0;
+    } else if (flapAngle > FLAP_MAX) {
+      flapAngle = FLAP_MAX;
+      if (flapVel > 0) flapVel = 0;
+    }
+  }
+
+  function stopIdle() {
+    idleOn = false;
+    cancelAnimationFrame(idleRaf);
+    idleRaf = 0;
+    idleLast = 0;
+  }
+
+  function idleFrame(now: number) {
+    if (!idleOn) return;
+    const dt = idleLast ? Math.min(now - idleLast, 64) : 16;
+    idleLast = now;
+    rotation = (rotation + IDLE_SPEED * dt) % TWO_PI;
+    if (flapAngle !== 0 || flapVel !== 0) stepFlap(dt); // let residual flap settle
+    render();
+    idleRaf = requestAnimationFrame(idleFrame);
+  }
+
+  function setIdle(on: boolean) {
+    const want = on && !!wheel && wheel.wedges.length > 0 && !spinning;
+    if (want === idleOn) return;
+    stopIdle();
+    if (want) {
+      idleOn = true;
+      idleRaf = requestAnimationFrame(idleFrame);
+    }
+  }
+
+  function stopReveal() {
+    cancelAnimationFrame(revealRaf);
+    revealRaf = 0;
+    revealPulse = 0;
+  }
+
+  function revealFrame(now: number) {
+    const elapsed = now - revealStart;
+    if (elapsed >= REVEAL_CYCLE_MS * REVEAL_CYCLES) {
+      revealPulse = 0; // settle to the static ring and stop redrawing
+      render();
+      revealRaf = 0;
+      return;
+    }
+    revealPulse = (elapsed % REVEAL_CYCLE_MS) / REVEAL_CYCLE_MS; // expanding sawtooth
+    render();
+    revealRaf = requestAnimationFrame(revealFrame);
+  }
+
   function spinTo(targetRotation: number, durationMs: number, opts: SpinOptions = {}) {
     cancelAnimationFrame(rafId);
+    stopIdle(); // idle must not write `rotation` while the spin owns it
+    stopReveal();
     highlightId = null; // a new spin clears any prior reveal spotlight
     const r0 = norm(rotation);
     rotation = r0;
@@ -274,15 +407,33 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
     const startTs = performance.now();
     spinning = true;
 
+    let prevNow = startTs;
+    let prevRot = r0;
+    let prevIdx = wedgeIndexAt(r0);
+
     const frame = (now: number) => {
       const t = Math.min(1, (now - startTs) / durationMs);
       rotation = r0 + delta * ease(t);
+      // Pointer flap: kick on each peg (wedge-edge) crossing, scaled by the
+      // wheel's instantaneous speed; the spring settles it between pegs. Cap dt
+      // (as idleFrame does): the flap's explicit-Euler spring is only stable for
+      // dt < ~66ms, so a tab-away/return frame gap must not blow it up.
+      const dt = Math.min(64, Math.max(1, now - prevNow));
+      const speed = Math.abs(rotation - prevRot) / dt; // rad/ms
+      const idx = wedgeIndexAt(rotation);
+      const kick = idx !== prevIdx ? speed * FLAP_KICK : 0;
+      stepFlap(dt, kick);
+      prevNow = now;
+      prevRot = rotation;
+      prevIdx = idx;
       render();
       opts.onTick?.(t);
       if (t < 1) {
         rafId = requestAnimationFrame(frame);
       } else {
         rotation = target;
+        flapAngle = 0; // rest the flap so the static pointer reads clean
+        flapVel = 0;
         render();
         spinning = false;
         opts.onDone?.();
@@ -294,18 +445,27 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
   return {
     setWheel(w) {
       wheel = w;
+      if (!w || w.wedges.length === 0) stopIdle(); // nothing to drift
       render();
     },
     render,
     spinTo,
     setHighlight(id) {
       highlightId = id;
+      stopReveal();
       render();
+      if (id !== null && !prefersReducedMotion()) {
+        revealStart = performance.now();
+        revealRaf = requestAnimationFrame(revealFrame);
+      }
     },
+    setIdle,
     getRotation: () => rotation,
     isSpinning: () => spinning,
     stop() {
       cancelAnimationFrame(rafId);
+      stopIdle();
+      stopReveal();
       spinning = false;
     },
   };

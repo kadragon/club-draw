@@ -2,6 +2,13 @@
 
 ## Review Backlog
 
+### PR #8 — [FEAT] ambient wheel motion: idle drift, pointer flap, reveal pulse (2026-06-03)
+
+- [REJECTED] Multiply flap `speed` by 1000 to "fix a rad/ms→rad/s unit mismatch" (agy P1). **Won't fix — false positive.** `FLAP_KICK = 1500` already bakes the rad/ms→rad/s conversion *plus* gain together (peak `kick = 0.025 rad/ms × 1500 ≈ 37`, clamped to `FLAP_VMAX = 9` in the fast phase; below ~0.006 rad/ms it scales 9→0 — the intended punch-then-fade). Agy's change (leaving FLAP_KICK=1500) pins kick at the clamp through the whole suspense tail, so the flap stays maxed until the last instant and the fade dies. Makes it worse. — src/wheel.ts:420
+- [ ] [decision] Reveal pulse grows `lineWidth` on the fixed wedge path rather than expanding an outward ring radius (agy P2). Cosmetic preference, not a bug; current look is a thickening-then-fading outline. Revisit if a true expanding halo is wanted (`ctx.arc(0,0,radius + revealPulse*25, …)`) — src/wheel.ts:281
+- [ ] [debt] DRY: `reduceMotion()` (main.ts) and `prefersReducedMotion()` (wheel.ts) independently define the same `prefers-reduced-motion` matchMedia query (review-pr P3). Extract to a shared util or inject the flag into the wheel — src/main.ts:21, src/wheel.ts:94
+- [ ] [decision] No `prefers-reduced-motion` change-event subscription: a mid-session OS toggle isn't honored until the next `refreshIdle()` (review-pr P3). Low value (refreshIdle fires on most actions); add `matchMedia(...).addEventListener("change", refreshIdle)` at boot if desired — src/main.ts:109
+
 ### PR #7 — [FEAT] auto-derive base slots + UI polish (2026-06-03)
 
 - [ ] [decision] START hidden in setup via `body:not(.stage-mode) .spin-btn { display: none }` — reviewer flags discoverability/a11y regression (keyboard/SR users can't reach START in setup). Author intent is deliberate gating ("draw can't begin before presenting"). Needs UX call: keep, or swap to `visibility: hidden` / add an affordance (source: pr-review-toolkit:review-pr P1) — src/style.css:822

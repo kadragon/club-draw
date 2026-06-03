@@ -478,6 +478,32 @@ body {
     transform: translate(-50%, -50%) scale(1.06);
   }
 }
+/* When ready (idle, not spinning): a slow breathe + expanding halo invites the
+   press, echoing the wheel's ambient drift. */
+.spin-btn:not(:disabled):not(.is-spinning) {
+  animation: spin-invite 1.9s ease-in-out infinite;
+}
+@keyframes spin-invite {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow:
+      var(--shadow-card),
+      0 0 0 0 rgba(10, 10, 10, 0.26);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.045);
+    box-shadow:
+      var(--shadow-card),
+      0 0 0 13px rgba(10, 10, 10, 0);
+  }
+}
+/* The always-on `spin-invite` animation owns `transform`, which would otherwise
+   swallow the press-down feedback. Pause it on :active so the scale(0.95) reads. */
+.spin-btn:not(:disabled):not(.is-spinning):active {
+  animation: none;
+  transform: translate(-50%, -50%) scale(0.95);
+}
 .status {
   font-size: 14px;
   color: var(--muted);
@@ -776,7 +802,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .overlay,
   .overlay-card,
-  .spin-btn.is-spinning {
+  .spin-btn.is-spinning,
+  .spin-btn:not(:disabled):not(.is-spinning) {
     animation: none;
   }
   .btn,
