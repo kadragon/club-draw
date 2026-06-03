@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "club-draw",
+  "account_id": "6ed03d41ee9287a3e0e5bde9a6772812",
   "compatibility_date": "2026-01-01",
   "assets": {
     "directory": "./dist",
