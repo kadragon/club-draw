@@ -23,7 +23,7 @@ Remaining lines are REJECTED (false positives) or DEFERRED (needs operator actio
 
 - [REJECTED] Remove hardcoded `account_id` from `wrangler.jsonc`. Flagged by 3/4 reviewers. **Won't fix.** (a) A Cloudflare account_id is a non-secret identifier, not a credential — grants no access without a separately-held API token; safe in source control. (b) Committing it is the PR's deliberate purpose and serves local deploy better than a per-dev env var. — wrangler.jsonc:4
 - [DEFERRED — user decision] CI deploy job absent. User opted to keep manual `bun run deploy`; a `jobs.deploy` (needs test, main-only) with `CF_API_TOKEN`/`CF_ACCOUNT_ID` secrets can be added later once secrets are set — .github/workflows, package.json
-- [CLOSED — moot] Version bump bundled into a `[HARNESS]` commit. A post-commit hook now auto-bumps the version per commit type, so version churn is no longer hand-bundled into feature commits — package.json
+- [CLOSED — moot] Version bump bundled into a `[HARNESS]` commit. A **local** `.git/hooks/post-commit` auto-bumps the version per commit type, so version churn is no longer hand-bundled into feature commits. (Local hook — not tracked in the repo; clones won't have it until set up.) — package.json
 
 ### PR #1 — [FEAT] stage mode + Clay restyle + suspense spin (2026-06-02)
 
@@ -38,3 +38,9 @@ Remaining lines are REJECTED (false positives) or DEFERRED (needs operator actio
 ### PR #2 — [FEAT] on-screen draw results, pastel wheel, favicon (2026-06-02)
 
 - [DONE — commit DOCS] Root `DESIGN.md` rewritten with the real club-draw palette/typography/layout/motion spec (replacing the leftover Clay.com analysis); AGENTS.md:10 pointer now valid — DESIGN.md
+
+### PR #9 — review-cycle out-of-scope items (2026-06-03)
+
+- [ ] [decision] START `disabled` in setup restores SR/a11y-tree discoverability but is skipped in tab order — keyboard-only users still can't `Tab` to it. Full fix = `aria-disabled="true"` + `tabindex="0"` + a click guard (`if aria-disabled return`) instead of HTML `disabled`. Deferred per the original START decision; revisit if a setup keyboard tab-stop is wanted (source: pr-review-toolkit:review-pr P1) — src/main.ts, index.html
+- [ ] [debt] Boot `matchMedia(...).addEventListener("change", refreshIdle)` doesn't retain the `MediaQueryList` reference, so the listener can't be removed later. No impact for a page-lifetime SPA; retain the ref if teardown/HMR cleanup is ever added (source: pr-review-toolkit:review-pr P2) — src/main.ts
+- [ ] [debt] `src/motion.ts` is a single-export 3-line module. Fine as the dedup target; if no second motion util appears, a future pass could fold it into a shared `utils.ts` (source: pr-review-toolkit:review-pr P3) — src/motion.ts
