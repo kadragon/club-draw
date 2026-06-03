@@ -137,6 +137,23 @@ export function wedgeAtPointer(wheel: Wheel, rotation: number): number {
 }
 
 /**
+ * Reveal-beat spotlight decision for one wedge. Render-only: an identity match,
+ * never angle math, so the fairness convention is untouched. Pure so the
+ * spotlight/dim logic can be unit-tested without a canvas.
+ *
+ * @param highlightId the spotlighted participant id, or null when no reveal is active.
+ * @param wedgeId the participant id of the wedge being rendered.
+ */
+export function highlightState(
+  highlightId: string | null,
+  wedgeId: string,
+): { isWinner: boolean; dim: boolean } {
+  const isWinner = highlightId !== null && wedgeId === highlightId;
+  const dim = highlightId !== null && !isWinner;
+  return { isWinner, dim };
+}
+
+/**
  * Rotation (rad) that lands the winner's wedge under the top pointer.
  *
  * `turns` full clockwise spins are added for the animation. A jitter within the
