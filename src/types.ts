@@ -18,10 +18,8 @@ export interface Prize {
   winnerId?: string;
 }
 
-/** Operator-tunable settings. */
+/** Operator-tunable settings. (Base slot count is auto-derived; see effectiveBaseSlots.) */
 export interface Settings {
-  /** Base slot count before subtracting cumulative wins. */
-  baseSlots: number;
   /** Spin animation duration (ms). */
   spinMs: number;
   /** Sound effects on/off. */

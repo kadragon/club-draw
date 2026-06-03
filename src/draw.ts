@@ -27,6 +27,29 @@ export function randomBelow(n: number, rng: RandomSource = defaultRng): number {
   return x % n;
 }
 
+/**
+ * Hard ceiling on the derived base. A pathological `cumulativeWins` (operator typo,
+ * bad CSV) would otherwise push `buildWheel`'s `totalSlots` past 2^32, where
+ * `randomBelow`'s accept region collapses to 0 and its rejection loop never
+ * terminates — freezing the spin. 1000 is orders of magnitude above any real club
+ * carry-over, so it never alters a legitimate draw.
+ */
+const MAX_BASE_SLOTS = 1000;
+
+/**
+ * Auto base slot count derived from the roster: `max(cumulativeWins) + 1`,
+ * clamped to {@link MAX_BASE_SLOTS}.
+ *
+ * Anchors the wheel so the heaviest carry-over winner gets exactly 1 slot and a
+ * zero-wins participant gets the most — the largest fair handicap with no operator
+ * knob. Counts ALL participants (including session-excluded winners) so base stays
+ * a stable property of the roster across the session. Empty roster → 1.
+ */
+export function effectiveBaseSlots(participants: readonly Participant[]): number {
+  const base = participants.reduce((m, p) => Math.max(m, p.cumulativeWins), 0) + 1;
+  return Math.min(MAX_BASE_SLOTS, base);
+}
+
 /** Slot count for a participant: `max(1, base - cumulativeWins)`. Floor of 1 keeps everyone in. */
 export function slotsFor(participant: Participant, baseSlots: number): number {
   return Math.max(1, baseSlots - participant.cumulativeWins);

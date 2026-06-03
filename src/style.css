@@ -122,7 +122,7 @@ body {
   color: var(--ink);
 }
 .eyebrow {
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
   letter-spacing: 1.5px;
   text-transform: uppercase;
@@ -230,7 +230,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--body);
   margin-bottom: 12px;
 }
@@ -240,7 +240,7 @@ body {
   gap: 8px;
 }
 .hint {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
   margin: 4px 0 0;
 }
@@ -355,7 +355,7 @@ body {
   white-space: nowrap;
 }
 .li-badge {
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
   font-feature-settings: "tnum";
   color: var(--ink);
@@ -379,7 +379,7 @@ body {
   counter-increment: prize;
   content: counter(prize);
   font-feature-settings: "tnum";
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--muted);
   min-width: 16px;
@@ -388,7 +388,7 @@ body {
 /* ── Import ────────────────────────────────────────────────────────────── */
 .import {
   margin-top: 12px;
-  font-size: 13px;
+  font-size: 14px;
 }
 .import summary {
   cursor: pointer;
@@ -526,19 +526,33 @@ body {
   font-weight: 600;
 }
 .record-prize {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--teal);
 }
 .record-at {
-  font-size: 11px;
+  font-size: 12px;
   font-feature-settings: "tnum";
   color: var(--muted);
 }
 .empty {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--muted);
   text-align: center;
   padding: 24px 0;
+}
+
+/* Destructive reset — coral outline so it reads off the cream canvas and signals
+   "careful". Fills on hover to confirm the intent. */
+#reset-session {
+  border-color: var(--coral);
+  color: var(--coral);
+  background: var(--card);
+  font-weight: 600;
+}
+#reset-session:hover {
+  background: var(--coral);
+  color: var(--on-primary);
+  border-color: var(--coral);
 }
 
 /* ── Overlays (winner reveal + fairness modal) ─────────────────────────── */
@@ -616,26 +630,29 @@ body {
   margin: 0 0 26px;
 }
 
-/* ── Fairness modal body ───────────────────────────────────────────────── */
+/* ── Fairness modal body — oversized so a projector audience can read it ── */
 .fairness-card {
   text-align: left;
+  max-width: 980px;
+  padding: 56px 64px;
 }
 .fairness-card .eyebrow {
   color: var(--pink);
+  font-size: 14px;
 }
 .fairness-title {
   font-family: var(--font-display);
-  font-size: clamp(26px, 3.5vw, 38px);
+  font-size: clamp(36px, 4.6vw, 54px);
   font-weight: 400;
   letter-spacing: -0.5px;
   color: var(--ink);
-  margin: 8px 0 14px;
+  margin: 12px 0 20px;
 }
 .fairness-lead {
-  font-size: 14px;
+  font-size: 19px;
   line-height: 1.6;
   color: var(--body);
-  margin: 0 0 18px;
+  margin: 0 0 28px;
 }
 .fairness-lead strong {
   font-weight: 700;
@@ -643,57 +660,57 @@ body {
 }
 .fairness-points {
   list-style: none;
-  margin: 0 0 20px;
+  margin: 0 0 30px;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 18px;
 }
 .fairness-points li {
   display: grid;
-  grid-template-columns: 96px 1fr;
-  gap: 12px;
+  grid-template-columns: 140px 1fr;
+  gap: 18px;
   align-items: start;
 }
 .fp-key {
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.2px;
   color: var(--ink);
   background: var(--surface-strong);
   border-radius: var(--radius-pill);
-  padding: 4px 0;
+  padding: 7px 0;
   text-align: center;
 }
 .fp-val {
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 17px;
+  line-height: 1.55;
   color: var(--body);
 }
 .fp-val code {
-  font-size: 12px;
+  font-size: 15px;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   background: var(--surface-soft);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-sm);
-  padding: 1px 5px;
+  padding: 1px 6px;
 }
 .fairness-stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  padding-top: 18px;
+  gap: 16px;
+  padding-top: 26px;
   border-top: 1px solid var(--hairline);
 }
 .fstat {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   text-align: center;
 }
 .fstat-num {
-  font-size: 24px;
+  font-size: 38px;
   font-weight: 700;
   letter-spacing: -0.5px;
   font-feature-settings: "tnum";
@@ -703,10 +720,10 @@ body {
   -webkit-text-fill-color: transparent;
 }
 .fstat-cap {
-  font-size: 10px;
+  font-size: 14px;
   letter-spacing: 0.2px;
   color: var(--muted);
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 /* ── Result modal (roster + records, copyable) ─────────────────────────── */
@@ -798,6 +815,12 @@ body.stage-mode .progress-text {
 /* Height-bound so the big title, wheel, and controls all fit one screen. */
 body.stage-mode .wheel-wrap {
   width: min(58vh, 90vw, 880px);
+}
+/* START lives on the wheel only in stage mode; setup hides it so the draw can't
+   begin before presenting. (Placed after the base .spin-btn rules to keep CSS
+   specificity ascending — see noDescendingSpecificity.) */
+body:not(.stage-mode) .spin-btn {
+  display: none;
 }
 body.stage-mode .spin-btn {
   width: clamp(120px, 11vw, 168px);

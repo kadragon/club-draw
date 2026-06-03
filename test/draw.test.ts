@@ -3,6 +3,7 @@ import {
   buildWheel,
   candidatesFrom,
   computeTargetRotation,
+  effectiveBaseSlots,
   randomBelow,
   selectIndex,
   selectWinner,
@@ -45,6 +46,30 @@ describe("slotsFor", () => {
   it("reflects base changes", () => {
     expect(slotsFor(p("a", 1), 3)).toBe(2);
     expect(slotsFor(p("a", 1), 8)).toBe(7);
+  });
+});
+
+describe("effectiveBaseSlots", () => {
+  it("is max cumulative + 1 across all participants", () => {
+    expect(effectiveBaseSlots([p("a", 0), p("b", 3), p("c", 1)])).toBe(4);
+  });
+  it("floors at 1 for an empty roster", () => {
+    expect(effectiveBaseSlots([])).toBe(1);
+  });
+  it("counts excluded participants too (base is a stable roster property)", () => {
+    expect(effectiveBaseSlots([p("a", 0), p("won", 5, true)])).toBe(6);
+  });
+  it("gives the heaviest winner exactly 1 slot, zero-wins the max", () => {
+    const base = effectiveBaseSlots([p("a", 0), p("b", 3)]);
+    expect(slotsFor(p("b", 3), base)).toBe(1);
+    expect(slotsFor(p("a", 0), base)).toBe(4);
+  });
+  it("caps an absurd cumulativeWins so totalSlots can't stall randomBelow", () => {
+    // A pathological carry-over (operator typo / bad CSV) must not push
+    // buildWheel's totalSlots past 2^32, where randomBelow's accept region
+    // collapses to 0 and its rejection loop never terminates. Assert the BOUND
+    // only — never feed this into randomBelow.
+    expect(effectiveBaseSlots([p("x", 5_000_000_000)])).toBe(1000);
   });
 });
 
