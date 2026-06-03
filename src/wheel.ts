@@ -110,10 +110,12 @@ const FLAP_KICK = 1500; // speed(rad/ms) → velocity bump(rad/s)
 const FLAP_VMAX = 9; // clamp per-tick velocity bump
 const FLAP_MAX = 0.32; // ~18° max deflection
 
-// Winner reveal pulse: an expanding, fading ring on the winning wedge, capped at
-// a few cycles so the canvas isn't redrawing forever behind the modal.
+// Winner reveal pulse: an expanding, fading ring on the winning wedge. One cycle
+// only — the winner modal opens ~700ms after the spin lands (the reveal beat), so
+// further cycles would repaint the whole canvas behind an opaque overlay where
+// they're never seen. Keep REVEAL_CYCLE_MS * REVEAL_CYCLES ≤ that beat.
 const REVEAL_CYCLE_MS = 600;
-const REVEAL_CYCLES = 3;
+const REVEAL_CYCLES = 1;
 
 export interface SpinOptions {
   /** Called every frame with the spin progress in [0,1]. */
@@ -413,8 +415,10 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
       const t = Math.min(1, (now - startTs) / durationMs);
       rotation = r0 + delta * ease(t);
       // Pointer flap: kick on each peg (wedge-edge) crossing, scaled by the
-      // wheel's instantaneous speed; the spring settles it between pegs.
-      const dt = Math.max(1, now - prevNow);
+      // wheel's instantaneous speed; the spring settles it between pegs. Cap dt
+      // (as idleFrame does): the flap's explicit-Euler spring is only stable for
+      // dt < ~66ms, so a tab-away/return frame gap must not blow it up.
+      const dt = Math.min(64, Math.max(1, now - prevNow));
       const speed = Math.abs(rotation - prevRot) / dt; // rad/ms
       const idx = wedgeIndexAt(rotation);
       const kick = idx !== prevIdx ? speed * FLAP_KICK : 0;

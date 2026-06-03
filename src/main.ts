@@ -102,13 +102,19 @@ function spinLocked(): boolean {
 
 /**
  * The wheel drifts slowly while idle so the stage feels alive. Allowed only when
- * there's something to draw and nothing else owns the wheel: no spin/reveal in
- * flight, no winner modal open, and motion not suppressed by the OS. Re-evaluated
- * after every state change that could flip one of those conditions.
+ * a draw is actually possible and nothing else owns the wheel: a pending prize
+ * and live candidates exist, no spin/reveal in flight, no winner modal open, and
+ * motion not suppressed by the OS. Without the pending-prize gate the idle RAF
+ * would run forever in a finished session (all prizes drawn) with nothing to spin.
+ * Re-evaluated after every state change that could flip one of those conditions.
  */
 function refreshIdle() {
   const allowed =
-    !reduceMotion() && els.overlay.hidden && !spinLocked() && liveCandidates().length > 0;
+    !reduceMotion() &&
+    els.overlay.hidden &&
+    !spinLocked() &&
+    currentPrize() !== null &&
+    liveCandidates().length > 0;
   wheel.setIdle(allowed);
 }
 
@@ -182,6 +188,7 @@ function renderPrizes() {
       persist();
       renderPrizes();
       syncControls();
+      refreshIdle(); // removing the last pending prize must stop idle drift
     };
     li.appendChild(del);
     els.zList.appendChild(li);
@@ -385,6 +392,7 @@ els.zForm.addEventListener("submit", (e) => {
   persist();
   renderPrizes();
   syncControls();
+  refreshIdle(); // a first/again-available prize may now permit idle drift
 });
 
 function applyRoster(text: string) {

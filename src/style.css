@@ -498,6 +498,12 @@ body {
       0 0 0 13px rgba(10, 10, 10, 0);
   }
 }
+/* The always-on `spin-invite` animation owns `transform`, which would otherwise
+   swallow the press-down feedback. Pause it on :active so the scale(0.95) reads. */
+.spin-btn:not(:disabled):not(.is-spinning):active {
+  animation: none;
+  transform: translate(-50%, -50%) scale(0.95);
+}
 .status {
   font-size: 14px;
   color: var(--muted);
