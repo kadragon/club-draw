@@ -11,15 +11,12 @@ import {
   type WinnerResult,
   wedgeAtPointer,
 } from "./draw.js";
+import { prefersReducedMotion as reduceMotion } from "./motion.js";
 import { playFanfare, playTick, unlockAudio } from "./sound.js";
 import { type AppState, loadState, makeParticipant, makePrize, saveState } from "./state.js";
 import { createWheel } from "./wheel.js";
 
 const TWO_PI = Math.PI * 2;
-
-/** Honor the OS "reduce motion" setting — compress visuals only, never the result. */
-const reduceMotion = (): boolean =>
-  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -76,9 +73,12 @@ function liveCandidates() {
   return candidatesFrom(state.participants);
 }
 
+/** Base slots derived from the live roster — keeps rebuild and spin call sites symmetric. */
+const currentBaseSlots = (): number => effectiveBaseSlots(state.participants);
+
 function rebuildWheel() {
   const cands = liveCandidates();
-  wheel.setWheel(cands.length ? buildWheel(cands, effectiveBaseSlots(state.participants)) : null);
+  wheel.setWheel(cands.length ? buildWheel(cands, currentBaseSlots()) : null);
   refreshIdle();
 }
 
@@ -274,7 +274,7 @@ function spin() {
   const prize = currentPrize();
   if (!prize || wheel.isSpinning()) return;
 
-  const result = selectWinner(state.participants, effectiveBaseSlots(state.participants));
+  const result = selectWinner(state.participants, currentBaseSlots());
   if (!result) {
     syncControls();
     return;
@@ -546,3 +546,6 @@ if (import.meta.env.DEV) {
 
 // ── Boot ────────────────────────────────────────────────────────────────────
 renderAll();
+
+// Honor a mid-session OS reduce-motion toggle without waiting for the next action.
+window.matchMedia?.("(prefers-reduced-motion: reduce)").addEventListener("change", refreshIdle);

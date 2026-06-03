@@ -1,3 +1,4 @@
+import { prefersReducedMotion } from "./motion.js";
 import type { Wheel } from "./types.js";
 
 const TWO_PI = Math.PI * 2;
@@ -90,9 +91,6 @@ function makeSuspenseEase(durationMs: number): (t: number) => number {
 function norm(a: number): number {
   return ((a % TWO_PI) + TWO_PI) % TWO_PI;
 }
-
-const prefersReducedMotion = (): boolean =>
-  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 // ── Presentation-only motion (never touches the fairness angle convention) ───
 // Idle ambient drift: the wheel turns slowly while waiting so the stage feels
