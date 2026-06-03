@@ -11,15 +11,12 @@ import {
   type WinnerResult,
   wedgeAtPointer,
 } from "./draw.js";
+import { prefersReducedMotion as reduceMotion } from "./motion.js";
 import { playFanfare, playTick, unlockAudio } from "./sound.js";
 import { type AppState, loadState, makeParticipant, makePrize, saveState } from "./state.js";
 import { createWheel } from "./wheel.js";
 
 const TWO_PI = Math.PI * 2;
-
-/** Honor the OS "reduce motion" setting — compress visuals only, never the result. */
-const reduceMotion = (): boolean =>
-  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -76,9 +73,12 @@ function liveCandidates() {
   return candidatesFrom(state.participants);
 }
 
+/** Base slots derived from the live roster — keeps rebuild and spin call sites symmetric. */
+const currentBaseSlots = (): number => effectiveBaseSlots(state.participants);
+
 function rebuildWheel() {
   const cands = liveCandidates();
-  wheel.setWheel(cands.length ? buildWheel(cands, effectiveBaseSlots(state.participants)) : null);
+  wheel.setWheel(cands.length ? buildWheel(cands, currentBaseSlots()) : null);
   refreshIdle();
 }
 
@@ -249,8 +249,13 @@ function syncControls() {
     els.progress.textContent = `${drawnCount + 1} / ${state.prizes.length} 상품 · 후보 ${cands.length}명`;
   }
 
-  const canSpin = !!cur && cands.length > 0 && !wheel.isSpinning();
+  // START is reachable (keyboard/SR) in setup but gated: the draw can't begin
+  // before presenting. In setup it stays disabled with an explanatory tooltip;
+  // stage mode applies the real prize/candidate gate.
+  const inStage = document.body.classList.contains("stage-mode");
+  const canSpin = inStage && !!cur && cands.length > 0 && !wheel.isSpinning();
   els.spinBtn.disabled = !canSpin;
+  els.spinBtn.title = inStage ? "" : "발표 모드에서 추첨을 시작할 수 있습니다";
   if (cur && cands.length === 0) {
     els.status.textContent = "남은 후보가 없습니다.";
   } else {
@@ -274,7 +279,7 @@ function spin() {
   const prize = currentPrize();
   if (!prize || wheel.isSpinning()) return;
 
-  const result = selectWinner(state.participants, effectiveBaseSlots(state.participants));
+  const result = selectWinner(state.participants, currentBaseSlots());
   if (!result) {
     syncControls();
     return;
@@ -436,6 +441,7 @@ els.sSound.addEventListener("change", () => {
 // State lives in memory the whole time — switching never reloads or re-inits.
 function enterStage() {
   document.body.classList.add("stage-mode");
+  syncControls(); // re-evaluate the START gate now that we're presenting
   // The canvas sizes itself from its CSS box on render; let the new layout settle,
   // then redraw so the wheel fills the stage.
   requestAnimationFrame(() => {
@@ -546,3 +552,6 @@ if (import.meta.env.DEV) {
 
 // ── Boot ────────────────────────────────────────────────────────────────────
 renderAll();
+
+// Honor a mid-session OS reduce-motion toggle without waiting for the next action.
+window.matchMedia?.("(prefers-reduced-motion: reduce)").addEventListener("change", refreshIdle);

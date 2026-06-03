@@ -133,7 +133,26 @@ export function wedgeAtPointer(wheel: Wheel, rotation: number): number {
     const w = wheel.wedges[i]!;
     if (phi >= w.start && phi < w.end) return i;
   }
-  return wheel.wedges.length - 1; // phi === 2π edge → last wedge
+  // Unreachable: norm() yields [0, 2π) and the wedges are contiguous over that
+  // range, so some wedge always matches. Kept as an FP-safety fallback.
+  return wheel.wedges.length - 1;
+}
+
+/**
+ * Reveal-beat spotlight decision for one wedge. Render-only: an identity match,
+ * never angle math, so the fairness convention is untouched. Pure so the
+ * spotlight/dim logic can be unit-tested without a canvas.
+ *
+ * @param highlightId the spotlighted participant id, or null when no reveal is active.
+ * @param wedgeId the participant id of the wedge being rendered.
+ */
+export function highlightState(
+  highlightId: string | null,
+  wedgeId: string,
+): { isWinner: boolean; dim: boolean } {
+  const isWinner = highlightId !== null && wedgeId === highlightId;
+  const dim = highlightId !== null && !isWinner;
+  return { isWinner, dim };
 }
 
 /**
@@ -143,6 +162,10 @@ export function wedgeAtPointer(wheel: Wheel, rotation: number): number {
  * winner's arc (never the exact center) keeps repeated spins from looking canned,
  * while the pointer is guaranteed to remain inside the winner arc — the fairness
  * invariant holds regardless of `turns` or jitter.
+ *
+ * Callers must pass `turns >= 1`; with `turns = 0` the returned rotation can be
+ * less than the current angle, and `spinTo`'s `while (target <= r0 + Math.PI)`
+ * guard would silently add a revolution. Today every caller passes 4–6.
  *
  * @param fraction position within the arc in (0,1); default 0.5 (center).
  */

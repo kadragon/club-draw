@@ -4,6 +4,7 @@ import {
   candidatesFrom,
   computeTargetRotation,
   effectiveBaseSlots,
+  highlightState,
   randomBelow,
   selectIndex,
   selectWinner,
@@ -258,5 +259,17 @@ describe("draw determinism with spied crypto fallback", () => {
     randomBelow(10, stubRng(3).rng);
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
+  });
+});
+
+describe("highlightState", () => {
+  it("no highlight active → neither winner nor dim", () => {
+    expect(highlightState(null, "a")).toEqual({ isWinner: false, dim: false });
+  });
+  it("matching id → winner, not dim", () => {
+    expect(highlightState("a", "a")).toEqual({ isWinner: true, dim: false });
+  });
+  it("non-matching id while highlight active → dim, not winner", () => {
+    expect(highlightState("a", "b")).toEqual({ isWinner: false, dim: true });
   });
 });

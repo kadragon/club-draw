@@ -1,3 +1,5 @@
+import { highlightState } from "./draw.js";
+import { prefersReducedMotion } from "./motion.js";
 import type { Wheel } from "./types.js";
 
 const TWO_PI = Math.PI * 2;
@@ -90,9 +92,6 @@ function makeSuspenseEase(durationMs: number): (t: number) => number {
 function norm(a: number): number {
   return ((a % TWO_PI) + TWO_PI) % TWO_PI;
 }
-
-const prefersReducedMotion = (): boolean =>
-  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 // ── Presentation-only motion (never touches the fairness angle convention) ───
 // Idle ambient drift: the wheel turns slowly while waiting so the stage feels
@@ -258,10 +257,9 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
       const ci = colorOf.get(w.participant.id)! % PALETTE.length;
       const a0 = w.start - HALF_PI;
       const a1 = w.end - HALF_PI;
-      // Reveal beat: spotlight the winner's wedge, dim the rest. Render-only —
-      // identity match, never angle math (fairness convention untouched).
-      const isWinner = highlightId !== null && w.participant.id === highlightId;
-      const dim = highlightId !== null && !isWinner;
+      // Reveal beat: spotlight the winner's wedge, dim the rest. Decision is the
+      // pure highlightState (covered in test/); here we only paint it.
+      const { isWinner, dim } = highlightState(highlightId, w.participant.id);
       ctx.globalAlpha = dim ? 0.3 : 1;
       ctx.beginPath();
       ctx.moveTo(0, 0);

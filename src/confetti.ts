@@ -21,8 +21,7 @@ interface Particle {
  */
 export function fireConfetti(count = 160): void {
   const canvas = document.createElement("canvas");
-  canvas.style.cssText =
-    "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:9999";
+  canvas.className = "confetti-canvas"; // styled via CSS class — no inline style (CSP)
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = window.innerWidth * dpr;
   canvas.height = window.innerHeight * dpr;
