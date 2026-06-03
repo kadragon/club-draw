@@ -79,6 +79,7 @@ function liveCandidates() {
 function rebuildWheel() {
   const cands = liveCandidates();
   wheel.setWheel(cands.length ? buildWheel(cands, effectiveBaseSlots(state.participants)) : null);
+  refreshIdle();
 }
 
 /**
@@ -97,6 +98,18 @@ function rebuildWheel() {
 let isRevealing = false;
 function spinLocked(): boolean {
   return wheel.isSpinning() || isRevealing;
+}
+
+/**
+ * The wheel drifts slowly while idle so the stage feels alive. Allowed only when
+ * there's something to draw and nothing else owns the wheel: no spin/reveal in
+ * flight, no winner modal open, and motion not suppressed by the OS. Re-evaluated
+ * after every state change that could flip one of those conditions.
+ */
+function refreshIdle() {
+  const allowed =
+    !reduceMotion() && els.overlay.hidden && !spinLocked() && liveCandidates().length > 0;
+  wheel.setIdle(allowed);
 }
 
 // ── Rendering ───────────────────────────────────────────────────────────────
@@ -417,7 +430,10 @@ function enterStage() {
   document.body.classList.add("stage-mode");
   // The canvas sizes itself from its CSS box on render; let the new layout settle,
   // then redraw so the wheel fills the stage.
-  requestAnimationFrame(() => wheel.render());
+  requestAnimationFrame(() => {
+    wheel.render();
+    refreshIdle();
+  });
 }
 function exitStage() {
   document.body.classList.remove("stage-mode");
