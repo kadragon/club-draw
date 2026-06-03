@@ -249,8 +249,13 @@ function syncControls() {
     els.progress.textContent = `${drawnCount + 1} / ${state.prizes.length} 상품 · 후보 ${cands.length}명`;
   }
 
-  const canSpin = !!cur && cands.length > 0 && !wheel.isSpinning();
+  // START is reachable (keyboard/SR) in setup but gated: the draw can't begin
+  // before presenting. In setup it stays disabled with an explanatory tooltip;
+  // stage mode applies the real prize/candidate gate.
+  const inStage = document.body.classList.contains("stage-mode");
+  const canSpin = inStage && !!cur && cands.length > 0 && !wheel.isSpinning();
   els.spinBtn.disabled = !canSpin;
+  els.spinBtn.title = inStage ? "" : "발표 모드에서 추첨을 시작할 수 있습니다";
   if (cur && cands.length === 0) {
     els.status.textContent = "남은 후보가 없습니다.";
   } else {
@@ -436,6 +441,7 @@ els.sSound.addEventListener("change", () => {
 // State lives in memory the whole time — switching never reloads or re-inits.
 function enterStage() {
   document.body.classList.add("stage-mode");
+  syncControls(); // re-evaluate the START gate now that we're presenting
   // The canvas sizes itself from its CSS box on render; let the new layout settle,
   // then redraw so the wheel fills the stage.
   requestAnimationFrame(() => {

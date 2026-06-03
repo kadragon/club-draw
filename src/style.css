@@ -843,12 +843,9 @@ body.stage-mode .progress-text {
 body.stage-mode .wheel-wrap {
   width: min(58vh, 90vw, 880px);
 }
-/* START lives on the wheel only in stage mode; setup hides it so the draw can't
-   begin before presenting. (Placed after the base .spin-btn rules to keep CSS
-   specificity ascending — see noDescendingSpecificity.) */
-body:not(.stage-mode) .spin-btn {
-  display: none;
-}
+/* START stays on the wheel in both modes so keyboard/SR users can reach it; in
+   setup it's disabled (gated in syncControls) so the draw can't begin before
+   presenting, and stage mode scales it up. */
 body.stage-mode .spin-btn {
   width: clamp(120px, 11vw, 168px);
   height: clamp(120px, 11vw, 168px);
