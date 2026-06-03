@@ -2,6 +2,13 @@
 
 ## Review Backlog
 
+### PR #7 — [FEAT] auto-derive base slots + UI polish (2026-06-03)
+
+- [ ] [decision] START hidden in setup via `body:not(.stage-mode) .spin-btn { display: none }` — reviewer flags discoverability/a11y regression (keyboard/SR users can't reach START in setup). Author intent is deliberate gating ("draw can't begin before presenting"). Needs UX call: keep, or swap to `visibility: hidden` / add an affordance (source: pr-review-toolkit:review-pr P1) — src/style.css:822
+- [ ] [decision] Fairness copy changed "회전과 무관" → "중복 없는 추첨"; removed the visible statement of the golden principle (winner decided before spin). Consider restoring a one-line mention (source: pr-review-toolkit:review-pr P2) — index.html:222
+- [ ] [debt] `effectiveBaseSlots(state.participants)` called twice per spin (rebuildWheel + spin). No real divergence today (pure fn, same input, mutations spin-locked), but a `currentBaseSlots()` helper would make call sites symmetric (source: pr-review-toolkit:review-pr P1/P3) — src/main.ts:81,257
+- [ ] [debt] Add a `loadState` comment noting the legacy `baseSlots` key in stored `club-draw:v1` JSON is intentionally ignored (no migration) (source: type-design-analyzer P2) — src/state.ts:55
+
 ### PR #6 — [HARNESS] pin account_id for local wrangler deploy (2026-06-03)
 
 - [REJECTED] Remove hardcoded `account_id` from `wrangler.jsonc`. Flagged by 3/4 reviewers (review-pr P0, agy P1; security-review P3 "no fix required"; codex none). **Won't fix.** (a) Security: a Cloudflare account_id is a non-secret identifier, not a credential — appears in dashboard URLs/deploy logs, grants no access without a separately-held API token (security-review 9/10 confidence, codex concurs); safe in source control even for a public repo. (b) Functional/intent: committing it is the PR's deliberate purpose (`pin account_id for local wrangler deploy`) and serves local deploy better than an env var each dev must re-set; removing it reverts the PR. — wrangler.jsonc:4

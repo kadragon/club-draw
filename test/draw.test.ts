@@ -64,6 +64,13 @@ describe("effectiveBaseSlots", () => {
     expect(slotsFor(p("b", 3), base)).toBe(1);
     expect(slotsFor(p("a", 0), base)).toBe(4);
   });
+  it("caps an absurd cumulativeWins so totalSlots can't stall randomBelow", () => {
+    // A pathological carry-over (operator typo / bad CSV) must not push
+    // buildWheel's totalSlots past 2^32, where randomBelow's accept region
+    // collapses to 0 and its rejection loop never terminates. Assert the BOUND
+    // only — never feed this into randomBelow.
+    expect(effectiveBaseSlots([p("x", 5_000_000_000)])).toBe(1000);
+  });
 });
 
 describe("candidatesFrom", () => {
