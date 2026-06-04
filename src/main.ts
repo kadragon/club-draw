@@ -578,6 +578,7 @@ function applyRestore(token: string) {
     els.status.textContent = "백업 형식이 올바르지 않습니다.";
     return;
   }
+  // AND: partial restores (participants-only or prizes-only) are valid use cases.
   if (data.participants.length === 0 && data.prizes.length === 0) {
     els.status.textContent = "백업이 비어 있습니다.";
     return;
@@ -601,7 +602,10 @@ els.restoreFile.addEventListener("change", () => {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => applyRestore(String(reader.result ?? ""));
-  reader.readAsText(file);
+  reader.onerror = () => {
+    els.status.textContent = "파일 읽기 실패.";
+  };
+  reader.readAsText(file, "utf-8");
   els.restoreFile.value = "";
 });
 

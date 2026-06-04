@@ -56,7 +56,9 @@ describe("decodeBackup — cumulativeWins clamping", () => {
   function makeToken(participants: unknown[], prizes: unknown[] = []): string {
     const json = JSON.stringify({ participants, prizes });
     const bytes = new TextEncoder().encode(json);
-    return btoa(String.fromCharCode(...bytes));
+    let latin1 = "";
+    for (let i = 0; i < bytes.length; i++) latin1 += String.fromCharCode(bytes[i]!);
+    return btoa(latin1);
   }
 
   it("clamps negative cumulativeWins to 0", () => {
@@ -83,7 +85,9 @@ describe("decodeBackup — filtering blank names", () => {
   function makeToken(participants: unknown[], prizes: unknown[] = []): string {
     const json = JSON.stringify({ participants, prizes });
     const bytes = new TextEncoder().encode(json);
-    return btoa(String.fromCharCode(...bytes));
+    let latin1 = "";
+    for (let i = 0; i < bytes.length; i++) latin1 += String.fromCharCode(bytes[i]!);
+    return btoa(latin1);
   }
 
   it("filters participants with blank or whitespace-only names", () => {
@@ -120,20 +124,23 @@ describe("decodeBackup — malformed input throws", () => {
 
   it("throws on base64-of-non-JSON", () => {
     const bytes = new TextEncoder().encode("hello world");
-    const token = btoa(String.fromCharCode(...bytes));
-    expect(() => decodeBackup(token)).toThrow();
+    let latin1 = "";
+    for (let i = 0; i < bytes.length; i++) latin1 += String.fromCharCode(bytes[i]!);
+    expect(() => decodeBackup(btoa(latin1))).toThrow();
   });
 
   it("throws on base64-of-JSON-array (not object)", () => {
     const bytes = new TextEncoder().encode("[1,2,3]");
-    const token = btoa(String.fromCharCode(...bytes));
-    expect(() => decodeBackup(token)).toThrow();
+    let latin1 = "";
+    for (let i = 0; i < bytes.length; i++) latin1 += String.fromCharCode(bytes[i]!);
+    expect(() => decodeBackup(btoa(latin1))).toThrow();
   });
 
   it("throws on base64-of-null", () => {
     const bytes = new TextEncoder().encode("null");
-    const token = btoa(String.fromCharCode(...bytes));
-    expect(() => decodeBackup(token)).toThrow();
+    let latin1 = "";
+    for (let i = 0; i < bytes.length; i++) latin1 += String.fromCharCode(bytes[i]!);
+    expect(() => decodeBackup(btoa(latin1))).toThrow();
   });
 
   it("throws on empty string", () => {
