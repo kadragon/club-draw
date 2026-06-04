@@ -23,7 +23,7 @@ export function encodeBackup(state: {
   };
   const json = JSON.stringify(payload);
   const bytes = new TextEncoder().encode(json);
-  // Map each byte to its Latin1 char in one pass — O(n), no spread-induced stack overflow
+  // Array.from mapper avoids O(n²) string concatenation and spread-induced stack overflow
   const latin1 = Array.from(bytes, (b) => String.fromCharCode(b)).join("");
   return btoa(latin1);
 }

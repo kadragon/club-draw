@@ -631,6 +631,7 @@ body {
 /* Confirm dialog */
 .confirm-card {
   max-width: 400px;
+  padding: 32px; /* tighter than .overlay-card's 40px 48px — more room on narrow viewports */
 }
 .confirm-message {
   margin: 0 0 24px;

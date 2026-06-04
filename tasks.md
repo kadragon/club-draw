@@ -49,3 +49,7 @@ Remaining lines are REJECTED (false positives) or DEFERRED (needs operator actio
 - [DONE — commit FEAT aria-disabled] START switched from HTML `disabled` to `aria-disabled="true"` — stays in tab order in both modes; click handler guards against `aria-disabled`. CSS updated to `[aria-disabled="true"]` selectors — src/main.ts, index.html, src/style.css
 - [DONE — commit REFACTOR utils.ts] Boot `matchMedia` ref hoisted to module-scope `reduceMotionMql` — listener removable for teardown/HMR — src/main.ts
 - [DONE — commit REFACTOR utils.ts] `src/motion.ts` folded into new `src/utils.ts`; `src/motion.ts` deleted — src/utils.ts, src/wheel.ts, src/main.ts
+
+### PR #11 — [CHORE] clear tasks.md backlog — all 5 open items (2026-06-04)
+
+- [ ] [constraint] `encodeBackup` output stability — no snapshot/deterministic-seed assertion. `JSON.stringify` key order is V8-deterministic in practice but not spec-guaranteed; a small fixed-input snapshot test would cement the contract (source: review P3) — test/backup.test.ts

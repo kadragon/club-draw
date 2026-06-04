@@ -101,9 +101,10 @@ function downloadText(filename: string, text: string): void {
 /**
  * In-app confirm dialog — works in sandboxed/cross-origin iframes where the
  * native `confirm()` is silently suppressed. Returns a Promise that resolves
- * `true` (확인) or `false` (취소 / Escape).
+ * `true` (확인) or `false` (취소 / Escape / backdrop click).
  */
 function confirmModal(message: string): Promise<boolean> {
+  if (!els.confirmOverlay.hidden) return Promise.resolve(false); // re-entrancy guard
   return new Promise((resolve) => {
     els.confirmMessage.textContent = message;
     els.confirmOverlay.hidden = false;
@@ -112,8 +113,24 @@ function confirmModal(message: string): Promise<boolean> {
       els.confirmOverlay.hidden = true;
       els.confirmOk.onclick = null;
       els.confirmCancel.onclick = null;
+      els.confirmOverlay.removeEventListener("click", onBackdrop);
+      document.removeEventListener("keydown", trapFocus);
       resolve(result);
     };
+    // Trap Tab/Shift-Tab within the two buttons — prevents keyboard escape from the dialog.
+    const focusables = [els.confirmOk, els.confirmCancel];
+    function trapFocus(e: KeyboardEvent) {
+      if (e.key !== "Tab") return;
+      e.preventDefault();
+      const idx = focusables.indexOf(document.activeElement as HTMLButtonElement);
+      const next = e.shiftKey ? (idx <= 0 ? 1 : 0) : idx >= 1 ? 0 : 1;
+      focusables[next]!.focus();
+    }
+    function onBackdrop(e: MouseEvent) {
+      if (e.target === els.confirmOverlay) finish(false);
+    }
+    document.addEventListener("keydown", trapFocus);
+    els.confirmOverlay.addEventListener("click", onBackdrop);
     els.confirmOk.onclick = () => finish(true);
     els.confirmCancel.onclick = () => finish(false);
   });
