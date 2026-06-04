@@ -20,12 +20,15 @@ import {
   type WinnerResult,
   wedgeAtPointer,
 } from "./draw.js";
-import { prefersReducedMotion as reduceMotion } from "./motion.js";
 import { playFanfare, playTick, unlockAudio } from "./sound.js";
 import { type AppState, loadState, makeParticipant, makePrize, saveState } from "./state.js";
+import { prefersReducedMotion as reduceMotion } from "./utils.js";
 import { createWheel } from "./wheel.js";
 
 const TWO_PI = Math.PI * 2;
+
+// Retained ref so the change listener can be removed later (HMR teardown, testing).
+const reduceMotionMql = window.matchMedia?.("(prefers-reduced-motion: reduce)") ?? null;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -627,4 +630,4 @@ if (import.meta.env.DEV) {
 renderAll();
 
 // Honor a mid-session OS reduce-motion toggle without waiting for the next action.
-window.matchMedia?.("(prefers-reduced-motion: reduce)").addEventListener("change", refreshIdle);
+reduceMotionMql?.addEventListener("change", refreshIdle);
