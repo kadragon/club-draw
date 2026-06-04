@@ -454,13 +454,13 @@ body {
     background 0.15s,
     transform 0.1s;
 }
-.spin-btn:hover:not(:disabled) {
+.spin-btn:hover:not([aria-disabled="true"]) {
   background: var(--primary-active);
 }
-.spin-btn:active:not(:disabled) {
+.spin-btn:active:not([aria-disabled="true"]) {
   transform: translate(-50%, -50%) scale(0.95);
 }
-.spin-btn:disabled {
+.spin-btn[aria-disabled="true"] {
   background: var(--muted);
   cursor: not-allowed;
   opacity: 0.9;
@@ -480,7 +480,7 @@ body {
 }
 /* When ready (idle, not spinning): a slow breathe + expanding halo invites the
    press, echoing the wheel's ambient drift. */
-.spin-btn:not(:disabled):not(.is-spinning) {
+.spin-btn:not([aria-disabled="true"]):not(.is-spinning) {
   animation: spin-invite 1.9s ease-in-out infinite;
 }
 @keyframes spin-invite {
@@ -500,7 +500,7 @@ body {
 }
 /* The always-on `spin-invite` animation owns `transform`, which would otherwise
    swallow the press-down feedback. Pause it on :active so the scale(0.95) reads. */
-.spin-btn:not(:disabled):not(.is-spinning):active {
+.spin-btn:not([aria-disabled="true"]):not(.is-spinning):active {
   animation: none;
   transform: translate(-50%, -50%) scale(0.95);
 }
@@ -843,9 +843,10 @@ body.stage-mode .progress-text {
 body.stage-mode .wheel-wrap {
   width: min(58vh, 90vw, 880px);
 }
-/* START stays on the wheel in both modes so keyboard/SR users can reach it; in
-   setup it's disabled (gated in syncControls) so the draw can't begin before
-   presenting, and stage mode scales it up. */
+/* START uses aria-disabled (not HTML disabled) so it stays in the tab order in
+   both modes — keyboard/SR users can always reach it. In setup aria-disabled="true"
+   gates the click handler so the draw can't begin before presenting. Stage mode
+   scales it up and lifts the gate once a prize + candidates are available. */
 body.stage-mode .spin-btn {
   width: clamp(120px, 11vw, 168px);
   height: clamp(120px, 11vw, 168px);

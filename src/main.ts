@@ -278,12 +278,13 @@ function syncControls() {
     els.progress.textContent = `${drawnCount + 1} / ${state.prizes.length} 상품 · 후보 ${cands.length}명`;
   }
 
-  // START is reachable (keyboard/SR) in setup but gated: the draw can't begin
-  // before presenting. In setup it stays disabled with an explanatory tooltip;
-  // stage mode applies the real prize/candidate gate.
+  // START is reachable (keyboard/SR) in both modes: aria-disabled keeps it in the
+  // tab order while gated; the click handler guards against aria-disabled="true".
+  // In setup it stays gated with an explanatory tooltip; stage mode applies the
+  // real prize/candidate gate.
   const inStage = document.body.classList.contains("stage-mode");
   const canSpin = inStage && !!cur && cands.length > 0 && !wheel.isSpinning();
-  els.spinBtn.disabled = !canSpin;
+  els.spinBtn.setAttribute("aria-disabled", canSpin ? "false" : "true");
   els.spinBtn.title = inStage ? "" : "발표 모드에서 추첨을 시작할 수 있습니다";
   if (cur && cands.length === 0) {
     els.status.textContent = "남은 후보가 없습니다.";
@@ -305,6 +306,7 @@ let lastResult: WinnerResult | null = null;
 
 function spin() {
   unlockAudio();
+  if (els.spinBtn.getAttribute("aria-disabled") === "true") return;
   const prize = currentPrize();
   if (!prize || wheel.isSpinning()) return;
 
@@ -319,7 +321,7 @@ function spin() {
   const frac = 0.12 + randomBelow(76) / 100; // inside arc, away from edges
   const target = computeTargetRotation(result.wheel, result.index, turns, frac);
 
-  els.spinBtn.disabled = true;
+  els.spinBtn.setAttribute("aria-disabled", "true");
   els.spinBtn.classList.add("is-spinning");
   els.spinBtn.textContent = "…";
   els.status.textContent = "추첨 중…";
@@ -395,7 +397,7 @@ function closeOverlayAndAdvance() {
   wheel.setHighlight(null); // drop the reveal spotlight before rebuilding
   rebuildWheel();
   syncControls();
-  if (!els.spinBtn.disabled) els.spinBtn.focus(); // restore focus to the wheel control
+  if (els.spinBtn.getAttribute("aria-disabled") !== "true") els.spinBtn.focus(); // restore focus to the wheel control
 }
 
 // ── Events ──────────────────────────────────────────────────────────────────
