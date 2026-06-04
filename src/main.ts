@@ -75,6 +75,10 @@ const els = {
   restoreText: $("restore-text") as HTMLTextAreaElement,
   restoreApply: $("restore-apply") as HTMLButtonElement,
   restoreFile: $("restore-file") as HTMLInputElement,
+  confirmOverlay: $("confirm-overlay"),
+  confirmMessage: $("confirm-message"),
+  confirmOk: $("confirm-ok") as HTMLButtonElement,
+  confirmCancel: $("confirm-cancel") as HTMLButtonElement,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -92,6 +96,27 @@ function downloadText(filename: string, text: string): void {
   a.rel = "noopener";
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * In-app confirm dialog — works in sandboxed/cross-origin iframes where the
+ * native `confirm()` is silently suppressed. Returns a Promise that resolves
+ * `true` (확인) or `false` (취소 / Escape).
+ */
+function confirmModal(message: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    els.confirmMessage.textContent = message;
+    els.confirmOverlay.hidden = false;
+    els.confirmOk.focus();
+    const finish = (result: boolean) => {
+      els.confirmOverlay.hidden = true;
+      els.confirmOk.onclick = null;
+      els.confirmCancel.onclick = null;
+      resolve(result);
+    };
+    els.confirmOk.onclick = () => finish(true);
+    els.confirmCancel.onclick = () => finish(false);
+  });
 }
 
 function currentPrize() {
@@ -507,6 +532,10 @@ els.fairnessOverlay.addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
+  if (!els.confirmOverlay.hidden) {
+    els.confirmCancel.click();
+    return;
+  } // dismiss as cancel
   if (!els.fairnessOverlay.hidden) closeFairness();
   else if (!els.resultOverlay.hidden) closeResult();
   else if (!els.overlay.hidden) closeOverlayAndAdvance();
@@ -549,9 +578,9 @@ els.resultCopy.addEventListener("click", async () => {
   }
 });
 
-els.resetSession.addEventListener("click", () => {
+els.resetSession.addEventListener("click", async () => {
   if (spinLocked()) return;
-  if (!confirm("세션 당첨/기록을 초기화할까요? (참가자·상품·누적값은 유지)")) return;
+  if (!(await confirmModal("세션 당첨/기록을 초기화할까요? (참가자·상품·누적값은 유지)"))) return;
   for (const p of state.participants) p.excluded = false;
   for (const z of state.prizes) {
     z.drawn = false;
@@ -574,7 +603,7 @@ els.backupShow.addEventListener("click", () => {
   els.restoreText.scrollIntoView({ behavior: "smooth", block: "nearest" });
 });
 
-function applyRestore(token: string) {
+async function applyRestore(token: string) {
   if (spinLocked()) return;
   let data: BackupData;
   try {
@@ -588,7 +617,8 @@ function applyRestore(token: string) {
     els.status.textContent = "백업이 비어 있습니다.";
     return;
   }
-  if (!confirm("현재 데이터를 백업 내용으로 교체할까요? (세션 기록은 초기화됩니다)")) return;
+  if (!(await confirmModal("현재 데이터를 백업 내용으로 교체할까요? (세션 기록은 초기화됩니다)")))
+    return;
   state.participants = data.participants.map((p) => makeParticipant(p.name, p.cumulativeWins));
   state.prizes = data.prizes.map((z) => makePrize(z.name));
   state.records = [];

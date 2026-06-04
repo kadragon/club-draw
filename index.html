@@ -271,6 +271,23 @@
       </div>
     </div>
 
+    <div
+      id="confirm-overlay"
+      class="overlay"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="confirm-message"
+      hidden
+    >
+      <div class="overlay-card confirm-card">
+        <p id="confirm-message" class="confirm-message"></p>
+        <div class="confirm-actions">
+          <button id="confirm-ok" class="btn btn-primary" type="button">확인</button>
+          <button id="confirm-cancel" class="btn btn-ghost" type="button">취소</button>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

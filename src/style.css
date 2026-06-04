@@ -628,6 +628,21 @@ body {
   background: var(--surface-strong);
 }
 
+/* Confirm dialog */
+.confirm-card {
+  max-width: 400px;
+}
+.confirm-message {
+  margin: 0 0 24px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.confirm-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
 /* Winner reveal = dramatic deep-teal Clay card */
 #winner-overlay .overlay-card {
   background: var(--teal);
