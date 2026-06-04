@@ -39,6 +39,11 @@ Remaining lines are REJECTED (false positives) or DEFERRED (needs operator actio
 
 - [DONE — commit DOCS] Root `DESIGN.md` rewritten with the real club-draw palette/typography/layout/motion spec (replacing the leftover Clay.com analysis); AGENTS.md:10 pointer now valid — DESIGN.md
 
+### PR #10 — [FEAT] backup/restore participants+prizes as base64 token (2026-06-04)
+
+- [ ] [debt] `encodeBackup` uses O(n²) string concatenation loop (`latin1 += ...`). Intentional — avoids spread stack overflow. For rosters > 1000 names, switch to `Array.from(bytes).map(...).join("")` or a `TextDecoder` encode path (source: review, pr-review-toolkit:review-pr P3) — src/csv.ts:28
+- [ ] [debt] `confirm()` in `applyRestore` is silently suppressed in cross-origin iframes — restore silently no-ops without user feedback. Future UX polish: replace with a custom modal confirm (source: review P3) — src/main.ts:585
+
 ### PR #9 — review-cycle out-of-scope items (2026-06-03)
 
 - [ ] [decision] START `disabled` in setup restores SR/a11y-tree discoverability but is skipped in tab order — keyboard-only users still can't `Tab` to it. Full fix = `aria-disabled="true"` + `tabindex="0"` + a click guard (`if aria-disabled return`) instead of HTML `disabled`. Deferred per the original START decision; revisit if a setup keyboard tab-stop is wanted (source: pr-review-toolkit:review-pr P1) — src/main.ts, index.html
