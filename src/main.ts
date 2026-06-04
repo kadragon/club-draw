@@ -1,6 +1,15 @@
 import "./style.css";
 import { fireConfetti } from "./confetti.js";
-import { mergeSessionWins, parseRoster, participantsToCSV, recordsToCSV } from "./csv.js";
+import {
+  type BackupData,
+  backupFilename,
+  decodeBackup,
+  encodeBackup,
+  mergeSessionWins,
+  parseRoster,
+  participantsToCSV,
+  recordsToCSV,
+} from "./csv.js";
 import {
   buildWheel,
   candidatesFrom,
@@ -58,11 +67,28 @@ const els = {
   resultRecords: $("result-records") as HTMLPreElement,
   resultCopy: $("result-copy") as HTMLButtonElement,
   resultClose: $("result-close") as HTMLButtonElement,
+  backupDownload: $("backup-download") as HTMLButtonElement,
+  backupShow: $("backup-show") as HTMLButtonElement,
+  restoreText: $("restore-text") as HTMLTextAreaElement,
+  restoreApply: $("restore-apply") as HTMLButtonElement,
+  restoreFile: $("restore-file") as HTMLInputElement,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function persist() {
   saveState(state);
+}
+
+/** Trigger a file download in the browser without any server round-trip. */
+function downloadText(filename: string, text: string): void {
+  const blob = new Blob([text], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function currentPrize() {
@@ -534,7 +560,50 @@ els.resetSession.addEventListener("click", () => {
   renderAll();
 });
 
-// Also allow exporting roster could be future; keep MVP focused.
+// ── Backup / Restore ─────────────────────────────────────────────────────────
+els.backupDownload.addEventListener("click", () =>
+  downloadText(backupFilename(new Date()), encodeBackup(state)),
+);
+els.backupShow.addEventListener("click", () => {
+  els.restoreText.value = encodeBackup(state);
+  els.restoreText.scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
+
+function applyRestore(token: string) {
+  if (spinLocked()) return;
+  let data: BackupData;
+  try {
+    data = decodeBackup(token);
+  } catch {
+    els.status.textContent = "백업 형식이 올바르지 않습니다.";
+    return;
+  }
+  if (data.participants.length === 0 && data.prizes.length === 0) {
+    els.status.textContent = "백업이 비어 있습니다.";
+    return;
+  }
+  if (!confirm("현재 데이터를 백업 내용으로 교체할까요? (세션 기록은 초기화됩니다)")) return;
+  state.participants = data.participants.map((p) => makeParticipant(p.name, p.cumulativeWins));
+  state.prizes = data.prizes.map((z) => makePrize(z.name));
+  state.records = [];
+  els.overlay.hidden = true;
+  wheel.setHighlight(null);
+  closeResult();
+  els.restoreText.value = "";
+  persist();
+  renderAll();
+  els.status.textContent = `복원 완료 — 참가자 ${state.participants.length}명, 상품 ${state.prizes.length}개`;
+}
+
+els.restoreApply.addEventListener("click", () => applyRestore(els.restoreText.value));
+els.restoreFile.addEventListener("change", () => {
+  const file = els.restoreFile.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => applyRestore(String(reader.result ?? ""));
+  reader.readAsText(file);
+  els.restoreFile.value = "";
+});
 
 window.addEventListener("resize", () => wheel.render());
 

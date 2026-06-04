@@ -145,6 +145,26 @@
           <ol id="record-list" class="records"></ol>
         </section>
         <button id="reset-session" class="btn btn-ghost btn-sm" type="button">세션 초기화</button>
+        <details class="import">
+          <summary>백업 / 복원</summary>
+          <div class="import-actions">
+            <button id="backup-download" class="btn btn-secondary" type="button">백업 파일 받기</button>
+            <button id="backup-show" class="btn btn-secondary" type="button">백업 텍스트 보기</button>
+          </div>
+          <textarea
+            id="restore-text"
+            class="textarea"
+            rows="4"
+            placeholder="백업 토큰을 붙여넣으세요"
+          ></textarea>
+          <div class="import-actions">
+            <button id="restore-apply" class="btn btn-secondary" type="button">복원</button>
+            <label class="btn btn-secondary file-btn">
+              백업 파일
+              <input id="restore-file" type="file" accept=".txt,text/plain" hidden />
+            </label>
+          </div>
+        </details>
       </aside>
     </main>
 

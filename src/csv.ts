@@ -1,4 +1,79 @@
-import type { DrawRecord, Participant } from "./types.js";
+import type { DrawRecord, Participant, Prize } from "./types.js";
+
+// ── Backup / Restore ──────────────────────────────────────────────────────────
+
+/** Participants+prizes snapshot for backup/restore. No ids, session state, or settings. */
+export interface BackupData {
+  participants: { name: string; cumulativeWins: number }[];
+  prizes: { name: string }[];
+}
+
+/**
+ * Encode participants + prizes to a single-line base64 token.
+ * ids, excluded, drawn, winnerId intentionally omitted — restore uses fresh ids.
+ * UTF-8 encoded before base64 so Korean/non-Latin names survive btoa().
+ */
+export function encodeBackup(state: {
+  participants: readonly Participant[];
+  prizes: readonly Prize[];
+}): string {
+  const payload: BackupData = {
+    participants: state.participants.map(({ name, cumulativeWins }) => ({ name, cumulativeWins })),
+    prizes: state.prizes.map(({ name }) => ({ name })),
+  };
+  const json = JSON.stringify(payload);
+  const bytes = new TextEncoder().encode(json);
+  // Build Latin1 string byte-by-byte to avoid stack overflow on large arrays
+  let latin1 = "";
+  for (let i = 0; i < bytes.length; i++) latin1 += String.fromCharCode(bytes[i]!);
+  return btoa(latin1);
+}
+
+/**
+ * Decode a base64 backup token to BackupData.
+ * Throws on any malformed input — callers must try/catch.
+ * Trims surrounding whitespace to tolerate paste artefacts.
+ */
+export function decodeBackup(token: string): BackupData {
+  const trimmed = token.trim();
+  if (trimmed === "") throw new Error("empty backup token");
+  const latin1 = atob(trimmed); // throws on invalid base64
+  const bytes = new Uint8Array(latin1.length);
+  for (let i = 0; i < latin1.length; i++) bytes[i] = latin1.charCodeAt(i);
+  const json = new TextDecoder().decode(bytes);
+  const data = JSON.parse(json) as unknown; // throws on invalid JSON
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    throw new Error("backup root must be an object");
+  }
+  const obj = data as Record<string, unknown>;
+  const participants = Array.isArray(obj.participants) ? obj.participants : [];
+  const prizes = Array.isArray(obj.prizes) ? obj.prizes : [];
+  return {
+    participants: participants
+      .filter((p): p is Record<string, unknown> => typeof p === "object" && p !== null)
+      .map((p) => {
+        const name = String(p.name ?? "").trim();
+        const n = Number(p.cumulativeWins);
+        return { name, cumulativeWins: Math.max(0, Math.floor(Number.isFinite(n) ? n : 0)) };
+      })
+      .filter((p) => p.name !== ""),
+    prizes: prizes
+      .filter((z): z is Record<string, unknown> => typeof z === "object" && z !== null)
+      .map((z) => ({ name: String(z.name ?? "").trim() }))
+      .filter((z) => z.name !== ""),
+  };
+}
+
+/**
+ * Generate a date-stamped backup filename: club-draw-backup-YYYY-MM-DD.txt.
+ * Uses local date parts so the name matches the operator's calendar.
+ */
+export function backupFilename(now: Date): string {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `club-draw-backup-${y}-${m}-${d}.txt`;
+}
 
 /** Parsed roster row before it becomes a full Participant (no id yet). */
 export interface RosterRow {
