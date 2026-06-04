@@ -148,6 +148,23 @@ describe("decodeBackup — malformed input throws", () => {
   });
 });
 
+describe("encodeBackup — large roster (performance guard)", () => {
+  it("round-trips 5000 participants including Korean names", () => {
+    const participants = Array.from({ length: 5000 }, (_, i) => ({
+      id: `id-${i}`,
+      name: i % 10 === 0 ? `홍길동${i}` : `Person${i}`,
+      cumulativeWins: i % 3,
+      excluded: false,
+    }));
+    const state = { participants, prizes: [] as { id: string; name: string }[] };
+    const token = encodeBackup(state);
+    const data = decodeBackup(token);
+    expect(data.participants).toHaveLength(5000);
+    expect(data.participants[0]?.name).toBe("홍길동0");
+    expect(data.participants[4999]?.name).toBe("Person4999");
+  });
+});
+
 describe("backupFilename", () => {
   it("produces YYYY-MM-DD filename from a fixed date", () => {
     const d = new Date(2026, 5, 4); // June 4, 2026 (local time)

@@ -20,12 +20,15 @@ import {
   type WinnerResult,
   wedgeAtPointer,
 } from "./draw.js";
-import { prefersReducedMotion as reduceMotion } from "./motion.js";
 import { playFanfare, playTick, unlockAudio } from "./sound.js";
 import { type AppState, loadState, makeParticipant, makePrize, saveState } from "./state.js";
+import { prefersReducedMotion as reduceMotion } from "./utils.js";
 import { createWheel } from "./wheel.js";
 
 const TWO_PI = Math.PI * 2;
+
+// Retained ref so the change listener can be removed later (HMR teardown, testing).
+const reduceMotionMql = window.matchMedia?.("(prefers-reduced-motion: reduce)") ?? null;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -72,6 +75,10 @@ const els = {
   restoreText: $("restore-text") as HTMLTextAreaElement,
   restoreApply: $("restore-apply") as HTMLButtonElement,
   restoreFile: $("restore-file") as HTMLInputElement,
+  confirmOverlay: $("confirm-overlay"),
+  confirmMessage: $("confirm-message"),
+  confirmOk: $("confirm-ok") as HTMLButtonElement,
+  confirmCancel: $("confirm-cancel") as HTMLButtonElement,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -89,6 +96,44 @@ function downloadText(filename: string, text: string): void {
   a.rel = "noopener";
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * In-app confirm dialog — works in sandboxed/cross-origin iframes where the
+ * native `confirm()` is silently suppressed. Returns a Promise that resolves
+ * `true` (확인) or `false` (취소 / Escape / backdrop click).
+ */
+function confirmModal(message: string): Promise<boolean> {
+  if (!els.confirmOverlay.hidden) return Promise.resolve(false); // re-entrancy guard
+  return new Promise((resolve) => {
+    els.confirmMessage.textContent = message;
+    els.confirmOverlay.hidden = false;
+    els.confirmOk.focus();
+    const finish = (result: boolean) => {
+      els.confirmOverlay.hidden = true;
+      els.confirmOk.onclick = null;
+      els.confirmCancel.onclick = null;
+      els.confirmOverlay.removeEventListener("click", onBackdrop);
+      document.removeEventListener("keydown", trapFocus);
+      resolve(result);
+    };
+    // Trap Tab/Shift-Tab within the two buttons — prevents keyboard escape from the dialog.
+    const focusables = [els.confirmOk, els.confirmCancel];
+    function trapFocus(e: KeyboardEvent) {
+      if (e.key !== "Tab") return;
+      e.preventDefault();
+      const idx = focusables.indexOf(document.activeElement as HTMLButtonElement);
+      const next = e.shiftKey ? (idx <= 0 ? 1 : 0) : idx >= 1 ? 0 : 1;
+      focusables[next]!.focus();
+    }
+    function onBackdrop(e: MouseEvent) {
+      if (e.target === els.confirmOverlay) finish(false);
+    }
+    document.addEventListener("keydown", trapFocus);
+    els.confirmOverlay.addEventListener("click", onBackdrop);
+    els.confirmOk.onclick = () => finish(true);
+    els.confirmCancel.onclick = () => finish(false);
+  });
 }
 
 function currentPrize() {
@@ -275,12 +320,13 @@ function syncControls() {
     els.progress.textContent = `${drawnCount + 1} / ${state.prizes.length} 상품 · 후보 ${cands.length}명`;
   }
 
-  // START is reachable (keyboard/SR) in setup but gated: the draw can't begin
-  // before presenting. In setup it stays disabled with an explanatory tooltip;
-  // stage mode applies the real prize/candidate gate.
+  // START is reachable (keyboard/SR) in both modes: aria-disabled keeps it in the
+  // tab order while gated; the click handler guards against aria-disabled="true".
+  // In setup it stays gated with an explanatory tooltip; stage mode applies the
+  // real prize/candidate gate.
   const inStage = document.body.classList.contains("stage-mode");
   const canSpin = inStage && !!cur && cands.length > 0 && !wheel.isSpinning();
-  els.spinBtn.disabled = !canSpin;
+  els.spinBtn.setAttribute("aria-disabled", canSpin ? "false" : "true");
   els.spinBtn.title = inStage ? "" : "발표 모드에서 추첨을 시작할 수 있습니다";
   if (cur && cands.length === 0) {
     els.status.textContent = "남은 후보가 없습니다.";
@@ -302,6 +348,7 @@ let lastResult: WinnerResult | null = null;
 
 function spin() {
   unlockAudio();
+  if (els.spinBtn.getAttribute("aria-disabled") === "true") return;
   const prize = currentPrize();
   if (!prize || wheel.isSpinning()) return;
 
@@ -316,7 +363,7 @@ function spin() {
   const frac = 0.12 + randomBelow(76) / 100; // inside arc, away from edges
   const target = computeTargetRotation(result.wheel, result.index, turns, frac);
 
-  els.spinBtn.disabled = true;
+  els.spinBtn.setAttribute("aria-disabled", "true");
   els.spinBtn.classList.add("is-spinning");
   els.spinBtn.textContent = "…";
   els.status.textContent = "추첨 중…";
@@ -392,7 +439,7 @@ function closeOverlayAndAdvance() {
   wheel.setHighlight(null); // drop the reveal spotlight before rebuilding
   rebuildWheel();
   syncControls();
-  if (!els.spinBtn.disabled) els.spinBtn.focus(); // restore focus to the wheel control
+  if (els.spinBtn.getAttribute("aria-disabled") !== "true") els.spinBtn.focus(); // restore focus to the wheel control
 }
 
 // ── Events ──────────────────────────────────────────────────────────────────
@@ -502,6 +549,10 @@ els.fairnessOverlay.addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
+  if (!els.confirmOverlay.hidden) {
+    els.confirmCancel.click();
+    return;
+  } // dismiss as cancel
   if (!els.fairnessOverlay.hidden) closeFairness();
   else if (!els.resultOverlay.hidden) closeResult();
   else if (!els.overlay.hidden) closeOverlayAndAdvance();
@@ -544,9 +595,9 @@ els.resultCopy.addEventListener("click", async () => {
   }
 });
 
-els.resetSession.addEventListener("click", () => {
+els.resetSession.addEventListener("click", async () => {
   if (spinLocked()) return;
-  if (!confirm("세션 당첨/기록을 초기화할까요? (참가자·상품·누적값은 유지)")) return;
+  if (!(await confirmModal("세션 당첨/기록을 초기화할까요? (참가자·상품·누적값은 유지)"))) return;
   for (const p of state.participants) p.excluded = false;
   for (const z of state.prizes) {
     z.drawn = false;
@@ -569,7 +620,7 @@ els.backupShow.addEventListener("click", () => {
   els.restoreText.scrollIntoView({ behavior: "smooth", block: "nearest" });
 });
 
-function applyRestore(token: string) {
+async function applyRestore(token: string) {
   if (spinLocked()) return;
   let data: BackupData;
   try {
@@ -583,7 +634,8 @@ function applyRestore(token: string) {
     els.status.textContent = "백업이 비어 있습니다.";
     return;
   }
-  if (!confirm("현재 데이터를 백업 내용으로 교체할까요? (세션 기록은 초기화됩니다)")) return;
+  if (!(await confirmModal("현재 데이터를 백업 내용으로 교체할까요? (세션 기록은 초기화됩니다)")))
+    return;
   state.participants = data.participants.map((p) => makeParticipant(p.name, p.cumulativeWins));
   state.prizes = data.prizes.map((z) => makePrize(z.name));
   state.records = [];
@@ -627,4 +679,4 @@ if (import.meta.env.DEV) {
 renderAll();
 
 // Honor a mid-session OS reduce-motion toggle without waiting for the next action.
-window.matchMedia?.("(prefers-reduced-motion: reduce)").addEventListener("change", refreshIdle);
+reduceMotionMql?.addEventListener("change", refreshIdle);

@@ -23,9 +23,8 @@ export function encodeBackup(state: {
   };
   const json = JSON.stringify(payload);
   const bytes = new TextEncoder().encode(json);
-  // Build Latin1 string byte-by-byte to avoid stack overflow on large arrays
-  let latin1 = "";
-  for (let i = 0; i < bytes.length; i++) latin1 += String.fromCharCode(bytes[i]!);
+  // Array.from mapper avoids O(n²) string concatenation and spread-induced stack overflow
+  const latin1 = Array.from(bytes, (b) => String.fromCharCode(b)).join("");
   return btoa(latin1);
 }
 

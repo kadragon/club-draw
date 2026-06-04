@@ -106,7 +106,7 @@
         </div>
         <div class="wheel-wrap">
           <canvas id="wheel" class="wheel" width="480" height="480"></canvas>
-          <button id="spin-btn" class="spin-btn" type="button" disabled>START</button>
+          <button id="spin-btn" class="spin-btn" type="button" aria-disabled="true">START</button>
         </div>
         <p id="status" class="status" role="status" aria-live="polite"></p>
 
@@ -264,9 +264,26 @@
             <span class="fstat-cap">샘플 균등성 검증</span>
           </div>
           <div class="fstat">
-            <span class="fstat-num">45 ✓</span>
+            <span class="fstat-num">73 ✓</span>
             <span class="fstat-cap">통과한 테스트</span>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="confirm-overlay"
+      class="overlay"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="confirm-message"
+      hidden
+    >
+      <div class="overlay-card confirm-card">
+        <p id="confirm-message" class="confirm-message"></p>
+        <div class="confirm-actions">
+          <button id="confirm-ok" class="btn btn-primary" type="button">확인</button>
+          <button id="confirm-cancel" class="btn btn-ghost" type="button">취소</button>
         </div>
       </div>
     </div>

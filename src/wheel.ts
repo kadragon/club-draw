@@ -1,6 +1,6 @@
 import { highlightState } from "./draw.js";
-import { prefersReducedMotion } from "./motion.js";
 import type { Wheel } from "./types.js";
+import { prefersReducedMotion } from "./utils.js";
 
 const TWO_PI = Math.PI * 2;
 const HALF_PI = Math.PI / 2;

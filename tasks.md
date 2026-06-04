@@ -41,11 +41,15 @@ Remaining lines are REJECTED (false positives) or DEFERRED (needs operator actio
 
 ### PR #10 — [FEAT] backup/restore participants+prizes as base64 token (2026-06-04)
 
-- [ ] [debt] `encodeBackup` uses O(n²) string concatenation loop (`latin1 += ...`). Intentional — avoids spread stack overflow. For rosters > 1000 names, switch to `Array.from(bytes).map(...).join("")` or a `TextDecoder` encode path (source: review, pr-review-toolkit:review-pr P3) — src/csv.ts:28
-- [ ] [debt] `confirm()` in `applyRestore` is silently suppressed in cross-origin iframes — restore silently no-ops without user feedback. Future UX polish: replace with a custom modal confirm (source: review P3) — src/main.ts:585
+- [DONE — commit REFACTOR encodeBackup O(n)] `encodeBackup` O(n²) concat loop replaced with `Array.from(bytes, fn).join("")` — O(n), no stack overflow, same output. 5000-participant round-trip guard added in test/backup.test.ts — src/csv.ts:28
+- [DONE — commit FEAT confirm modal] `confirm()` in `applyRestore` (and `clearSession`) replaced with in-app `confirmModal()` — works in sandboxed iframes; zero native `confirm()` calls remain — src/main.ts, index.html, src/style.css
 
 ### PR #9 — review-cycle out-of-scope items (2026-06-03)
 
-- [ ] [decision] START `disabled` in setup restores SR/a11y-tree discoverability but is skipped in tab order — keyboard-only users still can't `Tab` to it. Full fix = `aria-disabled="true"` + `tabindex="0"` + a click guard (`if aria-disabled return`) instead of HTML `disabled`. Deferred per the original START decision; revisit if a setup keyboard tab-stop is wanted (source: pr-review-toolkit:review-pr P1) — src/main.ts, index.html
-- [ ] [debt] Boot `matchMedia(...).addEventListener("change", refreshIdle)` doesn't retain the `MediaQueryList` reference, so the listener can't be removed later. No impact for a page-lifetime SPA; retain the ref if teardown/HMR cleanup is ever added (source: pr-review-toolkit:review-pr P2) — src/main.ts
-- [ ] [debt] `src/motion.ts` is a single-export 3-line module. Fine as the dedup target; if no second motion util appears, a future pass could fold it into a shared `utils.ts` (source: pr-review-toolkit:review-pr P3) — src/motion.ts
+- [DONE — commit FEAT aria-disabled] START switched from HTML `disabled` to `aria-disabled="true"` — stays in tab order in both modes; click handler guards against `aria-disabled`. CSS updated to `[aria-disabled="true"]` selectors — src/main.ts, index.html, src/style.css
+- [DONE — commit REFACTOR utils.ts] Boot `matchMedia` ref hoisted to module-scope `reduceMotionMql` — listener removable for teardown/HMR — src/main.ts
+- [DONE — commit REFACTOR utils.ts] `src/motion.ts` folded into new `src/utils.ts`; `src/motion.ts` deleted — src/utils.ts, src/wheel.ts, src/main.ts
+
+### PR #11 — [CHORE] clear tasks.md backlog — all 5 open items (2026-06-04)
+
+- [ ] [constraint] `encodeBackup` output stability — no snapshot/deterministic-seed assertion. `JSON.stringify` key order is V8-deterministic in practice but not spec-guaranteed; a small fixed-input snapshot test would cement the contract (source: review P3) — test/backup.test.ts
