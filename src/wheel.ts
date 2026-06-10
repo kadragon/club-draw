@@ -73,12 +73,12 @@ const { PALETTE, LABEL_INK } = ((): { PALETTE: string[]; LABEL_INK: string[] } =
  */
 export function makeSpinEase(durationMs: number): (t: number) => number {
   const tA = Math.min(0.04, 100 / durationMs); // anticipation phase end (~100 ms)
-  const tL = tA + Math.min(0.06, 160 / durationMs); // launch phase end (~260 ms total)
+  const tL = tA + Math.min(0.05, 120 / durationMs); // launch phase end (~220 ms total; shorter window → sharper slingshot)
   const tailTime = Math.min(0.6, Math.max(0.35, 3000 / durationMs));
   const tS = 1 - tailTime; // body-to-tail seam
 
   const tailDist = 0.12; // fraction of rotation covered in the tail
-  const windDip = -0.005; // anticipation depth; max backward extent (into Phase 2) ~−0.5–0.9 % of delta (≈7–16° for 5 turns)
+  const windDip = -0.01; // anticipation depth; doubled recoil (~14–28° for 5 turns) for more dramatic pull-back
 
   // Piecewise-linear velocity profile at key transitions
   const vW = (-2 * windDip) / tA; // wind-up pull speed (positive; velocity is −vW during phase 1)

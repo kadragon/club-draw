@@ -360,11 +360,24 @@ function spin() {
   els.spinBtn.textContent = "…";
   els.status.textContent = "추첨 중…";
 
+  // Launch jolt: camera-shake on the wheel-wrap (CSS, reduced-motion-safe).
+  const ww = $("wheel").parentElement as HTMLElement;
+  ww.classList.add("launching");
+  window.setTimeout(() => ww.classList.remove("launching"), 400);
+
   let lastPhase = -1;
   let lastTickAt = 0;
   const seg = TWO_PI / Math.max(1, result.wheel.totalSlots);
 
   const spinMs = state.settings.spinMs;
+
+  // Tail zoom: scale up slightly as the wheel slows to the final result.
+  // tailTime mirrors makeSpinEase's own constant so the zoom fires at the tail entry.
+  const tailTime = Math.min(0.6, Math.max(0.35, 3000 / spinMs));
+  const tailStartMs = spinMs * (1 - tailTime);
+  const zoomDurMs = Math.round(tailTime * spinMs * 0.75); // zoom in over first 75% of tail
+  ww.style.setProperty("--zoom-dur", `${zoomDurMs}ms`);
+  window.setTimeout(() => ww.classList.add("zooming"), tailStartMs);
 
   wheel.spinTo(target, spinMs, {
     onTick: () => {
@@ -385,8 +398,10 @@ function spin() {
       // it, making "휠이 멈춘 칸 == 당첨자" visible — then pop the modal. Hold the lock
       // across the beat so the pending winner can't be deleted before it's recorded.
       isRevealing = true;
+      // Remove zoom first so .landed animation owns the transform cleanly.
+      ww.classList.remove("zooming");
+      ww.style.removeProperty("--zoom-dur");
       // Landing punch — squash-and-stretch scale on the wheel-wrap (CSS animation).
-      const ww = $("wheel").parentElement as HTMLElement;
       ww.classList.add("landed");
       window.setTimeout(() => ww.classList.remove("landed"), 350);
       wheel.setHighlight(result.winner.id);
