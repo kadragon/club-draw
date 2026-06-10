@@ -181,11 +181,7 @@ function spinLocked(): boolean {
  */
 function refreshIdle() {
   const allowed =
-    !reduceMotion() &&
-    els.overlay.hidden &&
-    !spinLocked() &&
-    currentPrize() !== null &&
-    liveCandidates().length > 0;
+    els.overlay.hidden && !spinLocked() && currentPrize() !== null && liveCandidates().length > 0;
   wheel.setIdle(allowed);
 }
 
@@ -372,8 +368,7 @@ function spin() {
   let lastTickAt = 0;
   const seg = TWO_PI / Math.max(1, result.wheel.totalSlots);
 
-  // reduce-motion: keep the full result path, just collapse the animation to a beat.
-  const spinMs = reduceMotion() ? 1 : state.settings.spinMs;
+  const spinMs = state.settings.spinMs;
 
   wheel.spinTo(target, spinMs, {
     onTick: () => {
