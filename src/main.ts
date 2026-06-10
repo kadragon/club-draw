@@ -22,13 +22,9 @@ import {
 } from "./draw.js";
 import { playFanfare, playTick, unlockAudio } from "./sound.js";
 import { type AppState, loadState, makeParticipant, makePrize, saveState } from "./state.js";
-import { prefersReducedMotion as reduceMotion } from "./utils.js";
 import { createWheel } from "./wheel.js";
 
 const TWO_PI = Math.PI * 2;
-
-// Retained ref so the change listener can be removed later (HMR teardown, testing).
-const reduceMotionMql = window.matchMedia?.("(prefers-reduced-motion: reduce)") ?? null;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -174,8 +170,8 @@ function spinLocked(): boolean {
 /**
  * The wheel drifts slowly while idle so the stage feels alive. Allowed only when
  * a draw is actually possible and nothing else owns the wheel: a pending prize
- * and live candidates exist, no spin/reveal in flight, no winner modal open, and
- * motion not suppressed by the OS. Without the pending-prize gate the idle RAF
+ * and live candidates exist, no spin/reveal in flight, no winner modal open.
+ * Without the pending-prize gate the idle RAF
  * would run forever in a finished session (all prizes drawn) with nothing to spin.
  * Re-evaluated after every state change that could flip one of those conditions.
  */
@@ -390,7 +386,7 @@ function spin() {
       // across the beat so the pending winner can't be deleted before it's recorded.
       isRevealing = true;
       wheel.setHighlight(result.winner.id);
-      const beat = reduceMotion() ? 150 : 700;
+      const beat = 700;
       window.setTimeout(() => {
         isRevealing = false;
         onWin(result.winner.id, prize.id);
@@ -416,7 +412,7 @@ function onWin(winnerId: string, prizeId: string) {
   persist();
 
   if (state.settings.sound) playFanfare();
-  if (!reduceMotion()) fireConfetti();
+  fireConfetti();
 
   els.winnerName.textContent = winner.name;
   els.winnerPrize.textContent = prize.name;
@@ -672,6 +668,3 @@ if (import.meta.env.DEV) {
 
 // ── Boot ────────────────────────────────────────────────────────────────────
 renderAll();
-
-// Honor a mid-session OS reduce-motion toggle without waiting for the next action.
-reduceMotionMql?.addEventListener("change", refreshIdle);

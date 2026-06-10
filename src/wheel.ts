@@ -1,6 +1,5 @@
 import { highlightState } from "./draw.js";
 import type { Wheel } from "./types.js";
-import { prefersReducedMotion } from "./utils.js";
 
 const TWO_PI = Math.PI * 2;
 const HALF_PI = Math.PI / 2;
@@ -452,7 +451,7 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
       highlightId = id;
       stopReveal();
       render();
-      if (id !== null && !prefersReducedMotion()) {
+      if (id !== null) {
         revealStart = performance.now();
         revealRaf = requestAnimationFrame(revealFrame);
       }

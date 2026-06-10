@@ -813,8 +813,8 @@ body {
 }
 
 /* ── Reduced motion ────────────────────────────────────────────────────────
-   Strip decorative animation/transition. The spin itself still runs the full
-   result path (collapsed to a beat in JS); only the visual flourish is cut. */
+   Strip decorative CSS animation/transition. Canvas-driven motion (spin,
+   idle drift, reveal pulse) is not gated here — JS handles it via spinMs. */
 @media (prefers-reduced-motion: reduce) {
   .overlay,
   .overlay-card,
