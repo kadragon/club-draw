@@ -56,34 +56,67 @@ const { PALETTE, LABEL_INK } = ((): { PALETTE: string[]; LABEL_INK: string[] } =
 })();
 
 /**
- * Spin easing with a long, suspenseful tail.
+ * Spin easing: anticipation wind-up → hard launch → body decel → suspenseful tail.
  *
- * A fast opening phase decelerates into a slow crawl, then the crawl eases gently
- * to a dead stop over the final ~2–3 seconds — the "쫄깃한" near-miss build-up. The
- * curve is built from a piecewise-linear *velocity* profile (continuous, strictly
- * positive until the very end) integrated to position, normalized so `e(0)=0` and
- * `e(1)=1`. Because the easing only reshapes the motion — never the endpoint — the
- * wheel always settles on exactly the chosen cell (fairness invariant untouched).
+ * Four piecewise-linear velocity phases, integrated to position:
+ *   1. Anticipation [0, tA]:  brief CCW pull (~100 ms) — e(t) goes slightly negative,
+ *      giving the wheel a visible wind-up before snapping forward.
+ *   2. Hard launch  [tA, tL]: velocity snaps from negative to peak — punchy departure.
+ *   3. Body decel   [tL, tS]: linear decel from peak toward tail entry speed.
+ *   4. Tail crawl   [tS,  1]: slow peg-by-peg build-up, same "쫄깃한" feel as before.
  *
- * @param durationMs total spin time; the tail is held to ~2–3s of it.
+ * e(0)=0 and e(1)=1 are exact — the fairness invariant (wheel settles on the chosen
+ * wedge) is untouched. The anticipation only affects presentation; it never pushes
+ * the wheel past the target.
+ *
+ * @param durationMs total spin time in ms.
  */
-function makeSuspenseEase(durationMs: number): (t: number) => number {
-  const tailDist = 0.12; // fraction of the rotation saved for the slow crawl
-  const tailTime = Math.min(0.6, Math.max(0.35, 3000 / durationMs)); // ~2–3s tail
-  const ts = 1 - tailTime;
-  const v1 = (2 * tailDist) / tailTime; // crawl speed entering the tail
-  const v0 = (2 * (1 - tailDist)) / ts - v1; // fast opening speed
-  const a1 = 1 - tailDist; // normalized distance reached at the seam
+export function makeSpinEase(durationMs: number): (t: number) => number {
+  const tA = Math.min(0.04, 100 / durationMs); // anticipation phase end (~100 ms)
+  const tL = tA + Math.min(0.06, 160 / durationMs); // launch phase end (~260 ms total)
+  const tailTime = Math.min(0.6, Math.max(0.35, 3000 / durationMs));
+  const tS = 1 - tailTime; // body-to-tail seam
+
+  const tailDist = 0.12; // fraction of rotation covered in the tail
+  const windDip = -0.005; // anticipation depth; max backward extent (into Phase 2) ~−0.5–0.9 % of delta (≈7–16° for 5 turns)
+
+  // Piecewise-linear velocity profile at key transitions
+  const vW = (-2 * windDip) / tA; // wind-up pull speed (positive; velocity is −vW during phase 1)
+  const v1A = -vW; // velocity at end of anticipation (negative — still pulling back)
+  const v1 = (2 * tailDist) / tailTime; // velocity at tail entry
+  const launchT = tL - tA;
+  const bodyT = tS - tL;
+  // Solve for peak velocity so all phase areas sum to 1
+  const vPeak = (2 * (1 - tailDist - windDip) + vW * launchT - v1 * bodyT) / (launchT + bodyT);
+
+  // Pre-integrated seam positions (used as phase offsets)
+  const pA = windDip; // position at end of anticipation
+  const pL = pA + ((v1A + vPeak) * launchT) / 2; // position at end of launch
+  const pS = pL + ((vPeak + v1) * bodyT) / 2; // position at tail entry (≈ 1 − tailDist)
+
   return (t: number): number => {
     if (t <= 0) return 0;
     if (t >= 1) return 1;
-    if (t < ts) {
-      const v = v0 + (v1 - v0) * (t / ts); // linear v0 → v1
-      return (t * (v0 + v)) / 2;
+    if (t < tA) {
+      // Phase 1: velocity ramps 0 → v1A (anticipation pull)
+      return (-vW * t * t) / (2 * tA);
     }
-    const u = (t - ts) / tailTime; // 0..1 across the tail
-    const v = v1 * (1 - u); // linear v1 → 0
-    return a1 + ((t - ts) * (v1 + v)) / 2;
+    if (t < tL) {
+      // Phase 2: velocity ramps v1A → vPeak (hard launch)
+      const dt = t - tA;
+      const v = v1A + ((vPeak - v1A) * dt) / launchT;
+      return pA + (dt * (v1A + v)) / 2;
+    }
+    if (t < tS) {
+      // Phase 3: velocity ramps vPeak → v1 (body decel)
+      const dt = t - tL;
+      const v = vPeak + ((v1 - vPeak) * dt) / bodyT;
+      return pL + (dt * (vPeak + v)) / 2;
+    }
+    // Phase 4: velocity ramps v1 → 0 (tail crawl)
+    const dt = t - tS;
+    const v = v1 * (1 - dt / tailTime);
+    return pS + (dt * (v1 + v)) / 2;
   };
 }
 
@@ -114,6 +147,17 @@ const FLAP_MAX = 0.32; // ~18° max deflection
 // they're never seen. Keep REVEAL_CYCLE_MS * REVEAL_CYCLES ≤ that beat.
 const REVEAL_CYCLE_MS = 600;
 const REVEAL_CYCLES = 1;
+
+// Speed-reactive visual effects (in-canvas only; no inline styles).
+// Ghost trails: label-less colored rings drawn behind the wheel at a rotational
+// offset, creating a motion-blur illusion. Two ghosts is enough — three or more
+// re-runs 30+ arc fills per frame and will jank on projectors.
+const TRAIL_SPEED_MIN = 0.008; // rad/ms — trails appear above this speed
+const TRAIL_SPEED_RAMP = 0.014; // rad/ms — full-intensity delta above min
+const GHOST_OFFSET = 0.11; // rad spacing between ghost copies
+// Rim glow: a warm radial gradient ring that grows with speed.
+const GLOW_SPEED_MIN = 0.005; // rad/ms — glow appears above this speed
+const GLOW_SPEED_MAX = 0.02; // rad/ms — full glow intensity
 
 export interface SpinOptions {
   /** Called every frame with the spin progress in [0,1]. */
@@ -161,6 +205,10 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
   let rafId = 0;
   let spinning = false;
   let highlightId: string | null = null;
+
+  // Current spin speed (rad/ms); updated every frame, reset to 0 on stop.
+  // Read by render() to drive ghost trails and rim glow — purely presentational.
+  let currentSpeed = 0;
 
   // Ambient/reveal motion state (presentation only — see constants above).
   let idleRaf = 0;
@@ -238,19 +286,47 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
       return;
     }
 
+    // Color is keyed to the PARTICIPANT (input order → palette slot), so each person
+    // has one recognizable wedge color. Consecutive wedges get strongly contrasting
+    // hues (golden-angle palette); two people only share a color past 30 of them.
+    // Built first so both the ghost pass and the main draw can share it.
+    const colorOf = new Map<string, number>();
+    for (const w of wheel.wedges) {
+      if (!colorOf.has(w.participant.id)) colorOf.set(w.participant.id, colorOf.size);
+    }
+
+    // ── Ghost motion trails ────────────────────────────────────────────────────
+    // Label-less colored rings drawn at a slight rotational lag, creating a
+    // motion-blur illusion. Two ghosts max — more would re-run 30+ arc fills
+    // per frame and jank on projectors. Each ghost is O(N arcs), no text.
+    if (currentSpeed > TRAIL_SPEED_MIN) {
+      const intensity = Math.min(1, (currentSpeed - TRAIL_SPEED_MIN) / TRAIL_SPEED_RAMP);
+      for (let g = 1; g >= 0; g--) {
+        // Farther ghost drawn first (lower z), nearer ghost on top.
+        const alpha = ((2 - g) / 3) * intensity * 0.28;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(cx, cy);
+        ctx.rotate(rotation - (g + 1) * GHOST_OFFSET);
+        for (const w of wheel.wedges) {
+          const ci = colorOf.get(w.participant.id)! % PALETTE.length;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.arc(0, 0, radius, w.start - HALF_PI, w.end - HALF_PI);
+          ctx.closePath();
+          ctx.fillStyle = PALETTE[ci]!;
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+    }
+
+    // ── Main wheel ─────────────────────────────────────────────────────────────
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(rotation);
 
     const rLabel = radius * 0.94;
-
-    // Color is keyed to the PARTICIPANT (input order → palette slot), so each person
-    // has one recognizable wedge color. Consecutive wedges get strongly contrasting
-    // hues (golden-angle palette); two people only share a color past 30 of them.
-    const colorOf = new Map<string, number>();
-    for (const w of wheel.wedges) {
-      if (!colorOf.has(w.participant.id)) colorOf.set(w.participant.id, colorOf.size);
-    }
 
     wheel.wedges.forEach((w) => {
       const ci = colorOf.get(w.participant.id)! % PALETTE.length;
@@ -310,6 +386,25 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
     });
 
     ctx.restore();
+
+    // ── Speed-reactive rim glow ────────────────────────────────────────────────
+    // Warm radial gradient ring that expands with angular velocity — the wheel
+    // appears to "heat up" at launch and cool as it crawls to a stop.
+    if (currentSpeed > GLOW_SPEED_MIN) {
+      const t = Math.min(1, (currentSpeed - GLOW_SPEED_MIN) / (GLOW_SPEED_MAX - GLOW_SPEED_MIN));
+      const grad = ctx.createRadialGradient(cx, cy, radius - 4, cx, cy, radius + 18);
+      grad.addColorStop(0, "rgba(255, 252, 210, 0)");
+      grad.addColorStop(0.25, `rgba(255, 252, 210, ${0.55 * t})`);
+      grad.addColorStop(0.65, `rgba(255, 248, 190, ${0.2 * t})`);
+      grad.addColorStop(1, "rgba(255, 252, 210, 0)");
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius + 18, 0, TWO_PI);
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.restore();
+    }
+
     drawHub(cx, cy);
     drawPointer(cx, cy, radius);
   }
@@ -400,7 +495,7 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
     let target = targetRotation;
     while (target <= r0 + Math.PI) target += TWO_PI; // always a meaningful forward spin
     const delta = target - r0;
-    const ease = makeSuspenseEase(durationMs);
+    const ease = makeSpinEase(durationMs);
     const startTs = performance.now();
     spinning = true;
 
@@ -423,6 +518,7 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
       prevNow = now;
       prevRot = rotation;
       prevIdx = idx;
+      currentSpeed = speed; // drives ghost trails + rim glow in render()
       render();
       opts.onTick?.(t);
       if (t < 1) {
@@ -431,6 +527,7 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
         rotation = target;
         flapAngle = 0; // rest the flap so the static pointer reads clean
         flapVel = 0;
+        currentSpeed = 0; // clear speed-reactive effects on settle
         render();
         spinning = false;
         opts.onDone?.();
@@ -463,6 +560,7 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
       cancelAnimationFrame(rafId);
       stopIdle();
       stopReveal();
+      currentSpeed = 0;
       spinning = false;
     },
   };

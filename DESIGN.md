@@ -52,10 +52,20 @@
 
 ## 모션 (연출 전용, 공정성 불변식과 분리)
 
-- **서스펜스 이징**(`makeSuspenseEase`): 빠른 출발 → 느린 크롤 → 마지막 ~2–3s 졸깃한 정지.
-  속도 프로파일을 적분해 위치로 — 끝점은 절대 안 건드림(추첨 결과 = 멈춤 칸 불변).
+- **스핀 이징**(`makeSpinEase`, `src/wheel.ts`): 4단계 속도 적분 곡선.
+  1. **Anticipation**: ~100ms CCW 와인드업 — e(t) 살짝 음수로 당겼다가 발사.
+  2. **Hard launch**: 피크 속도로 빠른 가속 — 기존보다 또렷한 출발감.
+  3. **Body decel**: 피크 → 크롤 속도로 선형 감속.
+  4. **Tail crawl**: 마지막 ~2–3s 졸깃한 정지.
+  끝점 고정(e(0)=0, e(1)=1) — 추첨 결과 = 멈춤 칸 불변.
+- **Ghost motion trails** (캔버스 내): 고속 시 라벨 없는 색 링 2개를 회전 오프셋으로 뒤에 그려
+  모션블러 연출. 속도가 낮아지면 자연소멸. 프로젝터 jank 방지 위해 텍스트 재렌더 없음.
+- **Rim glow** (캔버스 내): 바깥 림에 따뜻한 크림 방사 그라데이션 — 빠를 때 밝고 느려지며 식음.
+  `--canvas` 크림 톤과 충돌 없게 `rgba(255, 252, 210, …)` 색조.
+- **Landing punch** (CSS class): `onDone` 시 `.wheel-wrap.landed` 토글 → scale 1→1.046→0.982→1
+  (270ms). `prefers-reduced-motion`에서 suppressed.
 - **유휴 드리프트·리빌 펄스·포인터 플랩**: 무대가 살아있게 하는 ambient 모션.
-- **reduce-motion**: OS 설정 존중(`src/motion.ts`). 시각만 압축, 결과는 절대 안 바꿈.
+- **reduce-motion**: OS 설정 존중. Canvas 모션은 JS(`spinMs`)로 조절, CSS 장식 애니메이션만 off.
 
 ## 규칙
 
