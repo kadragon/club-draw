@@ -434,7 +434,7 @@ body {
 }
 @keyframes wheel-land {
   0% {
-    transform: scale(1);
+    transform: scale(1.06); /* continues from .zooming forwards fill — no 1-frame pop */
   }
   28% {
     transform: scale(1.046);
@@ -444,6 +444,54 @@ body {
   }
   100% {
     transform: scale(1);
+  }
+}
+/* Launch jolt: rapid-decay camera-shake on spin start. Class toggled by JS in
+   spin(); removed after 400 ms (animation 350 ms). Reduced-motion suppresses
+   the animation — class still removed by same setTimeout. */
+.wheel-wrap.launching {
+  animation: wheel-launch 350ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+@keyframes wheel-launch {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  10% {
+    transform: translate(-6px, -4px) rotate(-1.8deg);
+  }
+  22% {
+    transform: translate(5px, 3px) rotate(1.4deg);
+  }
+  35% {
+    transform: translate(-4px, -2px) rotate(-1deg);
+  }
+  50% {
+    transform: translate(3px, 1px) rotate(0.6deg);
+  }
+  65% {
+    transform: translate(-2px, -1px) rotate(-0.3deg);
+  }
+  80% {
+    transform: translate(1px, 0px) rotate(0.1deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+}
+/* Tail zoom: wheel scales up gently as it slows toward the final wedge. Duration
+   is set via --zoom-dur by JS: round(tailTime × spinMs × 0.75) — e.g. 2250ms at
+   default 5000ms spin. Fallback 2250ms is unreachable in practice; JS always sets
+   the property before adding the class. animation: forwards holds scale at 1.06
+   until .landed takes over in onDone. */
+.wheel-wrap.zooming {
+  animation: wheel-zoom var(--zoom-dur, 2250ms) ease-out forwards;
+}
+@keyframes wheel-zoom {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.06);
   }
 }
 .wheel {
@@ -840,7 +888,9 @@ body {
   .overlay-card,
   .spin-btn.is-spinning,
   .spin-btn:not(:disabled):not(.is-spinning),
-  .wheel-wrap.landed {
+  .wheel-wrap.landed,
+  .wheel-wrap.launching,
+  .wheel-wrap.zooming {
     animation: none;
   }
   .btn,
