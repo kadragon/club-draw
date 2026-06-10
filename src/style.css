@@ -434,7 +434,7 @@ body {
 }
 @keyframes wheel-land {
   0% {
-    transform: scale(1);
+    transform: scale(1.06); /* continues from .zooming forwards fill — no 1-frame pop */
   }
   28% {
     transform: scale(1.046);
@@ -479,10 +479,12 @@ body {
   }
 }
 /* Tail zoom: wheel scales up gently as it slows toward the final wedge. Duration
-   is set via --zoom-dur by JS (75% of the tail phase). animation: forwards keeps
-   the scale held at 1.06 until .landed animation takes over in onDone. */
+   is set via --zoom-dur by JS: round(tailTime × spinMs × 0.75) — e.g. 2250ms at
+   default 5000ms spin. Fallback 2250ms is unreachable in practice; JS always sets
+   the property before adding the class. animation: forwards holds scale at 1.06
+   until .landed takes over in onDone. */
 .wheel-wrap.zooming {
-  animation: wheel-zoom var(--zoom-dur, 1800ms) ease-out forwards;
+  animation: wheel-zoom var(--zoom-dur, 2250ms) ease-out forwards;
 }
 @keyframes wheel-zoom {
   from {

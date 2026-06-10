@@ -71,10 +71,16 @@ const { PALETTE, LABEL_INK } = ((): { PALETTE: string[]; LABEL_INK: string[] } =
  *
  * @param durationMs total spin time in ms.
  */
+/** Fraction of spin duration spent in the tail crawl phase. Single source of
+ *  truth shared by makeSpinEase (physics) and main.ts (zoom timing). */
+export function getTailTime(durationMs: number): number {
+  return Math.min(0.6, Math.max(0.35, 3000 / durationMs));
+}
+
 export function makeSpinEase(durationMs: number): (t: number) => number {
   const tA = Math.min(0.04, 100 / durationMs); // anticipation phase end (~100 ms)
   const tL = tA + Math.min(0.05, 120 / durationMs); // launch phase end (~220 ms total; shorter window → sharper slingshot)
-  const tailTime = Math.min(0.6, Math.max(0.35, 3000 / durationMs));
+  const tailTime = getTailTime(durationMs);
   const tS = 1 - tailTime; // body-to-tail seam
 
   const tailDist = 0.12; // fraction of rotation covered in the tail
