@@ -78,7 +78,7 @@ export function makeSpinEase(durationMs: number): (t: number) => number {
   const tS = 1 - tailTime; // body-to-tail seam
 
   const tailDist = 0.12; // fraction of rotation covered in the tail
-  const windDip = -0.005; // anticipation depth (~−0.5 % of delta ≈ 7 ° for a 5-turn spin)
+  const windDip = -0.005; // anticipation depth; max backward extent (into Phase 2) ~−0.5–0.9 % of delta (≈7–16° for 5 turns)
 
   // Piecewise-linear velocity profile at key transitions
   const vW = (-2 * windDip) / tA; // wind-up pull speed (positive; velocity is −vW during phase 1)
@@ -393,8 +393,9 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
     if (currentSpeed > GLOW_SPEED_MIN) {
       const t = Math.min(1, (currentSpeed - GLOW_SPEED_MIN) / (GLOW_SPEED_MAX - GLOW_SPEED_MIN));
       const grad = ctx.createRadialGradient(cx, cy, radius - 4, cx, cy, radius + 18);
-      grad.addColorStop(0, `rgba(255, 252, 210, ${0.55 * t})`);
-      grad.addColorStop(0.55, `rgba(255, 248, 190, ${0.2 * t})`);
+      grad.addColorStop(0, "rgba(255, 252, 210, 0)");
+      grad.addColorStop(0.25, `rgba(255, 252, 210, ${0.55 * t})`);
+      grad.addColorStop(0.65, `rgba(255, 248, 190, ${0.2 * t})`);
       grad.addColorStop(1, "rgba(255, 252, 210, 0)");
       ctx.save();
       ctx.beginPath();

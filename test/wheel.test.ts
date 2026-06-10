@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { makeSpinEase } from "../src/wheel.js";
 
 describe("makeSpinEase — fairness guards", () => {
-  const DURATIONS = [2000, 5000, 10000, 20000];
+  const DURATIONS = [1000, 2000, 5000, 10000, 20000];
 
   it("e(0) === 0 exactly", () => {
     for (const ms of DURATIONS) {
@@ -16,13 +16,30 @@ describe("makeSpinEase — fairness guards", () => {
     }
   });
 
+  it("formula approaches 1 at t→1⁻", () => {
+    for (const ms of DURATIONS) {
+      expect(makeSpinEase(ms)(1 - 1e-8), `ms=${ms}`).toBeCloseTo(1, 4);
+    }
+  });
+
   it("anticipation: e dips below 0 in the wind-up window", () => {
     for (const ms of DURATIONS) {
-      // Sample at 60 ms — always inside the anticipation phase for these durations
-      // (tA = min(0.04, 100/ms), so 60/ms < tA for all ms in [2000..20000])
+      // Sample at half of tA — always strictly inside Phase 1 for any durationMs > 0.
+      // (tA = min(0.04, 100/ms); at ms=1000 this puts the sample at t=0.02, inside [0, 0.04])
       const e = makeSpinEase(ms);
-      const t60 = 60 / ms;
-      expect(e(t60), `ms=${ms} at t=60ms`).toBeLessThan(0);
+      const tSample = 0.5 * Math.min(0.04, 100 / ms);
+      expect(e(tSample), `ms=${ms} at t=${tSample}`).toBeLessThan(0);
+    }
+  });
+
+  it("body decelerates: earlier increment > later increment", () => {
+    // Body phase spans [tL, tS]. For all durations: tL ≤ 0.10, tS ≥ 0.40.
+    // t ∈ [0.15, 0.35] is safely inside the body phase for all valid durations.
+    for (const ms of DURATIONS) {
+      const e = makeSpinEase(ms);
+      const early = e(0.2) - e(0.15);
+      const late = e(0.35) - e(0.3);
+      expect(early, `ms=${ms}`).toBeGreaterThan(late);
     }
   });
 
