@@ -385,6 +385,10 @@ function spin() {
       // it, making "휠이 멈춘 칸 == 당첨자" visible — then pop the modal. Hold the lock
       // across the beat so the pending winner can't be deleted before it's recorded.
       isRevealing = true;
+      // Landing punch — squash-and-stretch scale on the wheel-wrap (CSS animation).
+      const ww = $("wheel").parentElement as HTMLElement;
+      ww.classList.add("landed");
+      window.setTimeout(() => ww.classList.remove("landed"), 350);
       wheel.setHighlight(result.winner.id);
       const beat = 700;
       window.setTimeout(() => {
