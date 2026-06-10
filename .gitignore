@@ -6,3 +6,6 @@ dist
 .playwright-mcp
 .claude
 cache
+.agents/
+.harness-curator-state.json
+screenshot-*.png
