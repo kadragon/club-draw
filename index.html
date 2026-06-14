@@ -215,53 +215,48 @@
     >
       <div class="overlay-card fairness-card">
         <button id="fairness-close" class="overlay-close" type="button" aria-label="닫기">×</button>
-        <span class="eyebrow">수학적으로 검증된 공정성</span>
-        <h2 id="fairness-title" class="fairness-title">편향 0, 설계로 증명</h2>
+        <span class="eyebrow">아무도 조작 못 하는 추첨</span>
+        <h2 id="fairness-title" class="fairness-title">숫자로 증명된 공정함</h2>
         <p class="fairness-lead">
-          모든 후보의 당첨 확률은 칸 수에 <strong>정확히</strong> 비례합니다. 코드와 난수
-          생성기 어디에도 미세한 치우침이 없도록 설계했습니다.
+          모든 참가자의 당첨 확률은 칸 수에 <strong>정확히</strong> 비례합니다. 특정 사람을
+          유리하게 만드는 요소가 코드 어디에도 없습니다.
         </p>
 
         <ul class="fairness-points">
           <li>
             <span class="fp-key">추첨이 먼저</span>
             <span class="fp-val"
-              >당첨자는 회전 전에 추첨으로 확정 — 원판 회전은 그 결과를 보여주는 연출일 뿐</span
+              >원판이 돌기 전에 이미 당첨자는 정해집니다 — 원판 회전은 그 결과를 보여주는 연출일 뿐</span
             >
           </li>
           <li>
-            <span class="fp-key">암호학적 난수</span>
-            <span class="fp-val">브라우저 <code>crypto.getRandomValues</code> (CSPRNG) — 예측·재현 불가</span>
+            <span class="fp-key">은행도 쓰는 난수</span>
+            <span class="fp-val">금융·보안에서 사용하는 브라우저 내장 난수를 씁니다. 누구도 다음 결과를 예측하거나 재현할 수 없어요.</span>
           </li>
           <li>
-            <span class="fp-key">모듈러 편향 0</span>
+            <span class="fp-key">끝번호 치우침 없음</span>
             <span class="fp-val"
-              >Rejection sampling: 2³² 범위에서 칸 수의 배수를 초과하는 끝부분을 버려, 모든
-              결과가 정확히 같은 확률</span
+              >모든 참가자가 정확히 같은 확률로 뽑힙니다. 특정 번호에 유리한 구조가 없어요.</span
             >
           </li>
           <li>
-            <span class="fp-key">투명한 가중치</span>
-            <span class="fp-val">당첨 확률 = 내 칸 수 ÷ 전체 칸 수, 칸 수 = max(1, (최대누적+1) − 누적당첨)</span>
+            <span class="fp-key">확률은 칸 수 비례</span>
+            <span class="fp-val">당첨 확률 = 내 칸 수 ÷ 전체 칸 수. 칸이 많을수록 당첨 가능성이 높아집니다.</span>
           </li>
           <li>
             <span class="fp-key">중복 없는 추첨</span>
-            <span class="fp-val">당첨자는 이후 추첨에서 자동 제외 — 한 사람이 여러 상품을 독식할 수 없음</span>
+            <span class="fp-val">한 번 당첨된 사람은 이후 추첨에서 자동으로 빠집니다 — 한 사람이 상품을 독차지할 수 없어요.</span>
           </li>
         </ul>
 
         <div class="fairness-stats">
           <div class="fstat">
-            <span class="fstat-num">2³²</span>
-            <span class="fstat-cap">난수 공간</span>
-          </div>
-          <div class="fstat">
-            <span class="fstat-num">0</span>
-            <span class="fstat-cap">모듈러 편향</span>
+            <span class="fstat-num">0%</span>
+            <span class="fstat-cap">특정인 유리함</span>
           </div>
           <div class="fstat">
             <span class="fstat-num">60k</span>
-            <span class="fstat-cap">샘플 균등성 검증</span>
+            <span class="fstat-cap">공정성 검증 횟수</span>
           </div>
           <div class="fstat">
             <span class="fstat-num">73 ✓</span>
