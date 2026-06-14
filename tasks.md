@@ -50,6 +50,13 @@ Remaining lines are REJECTED (false positives) or DEFERRED (needs operator actio
 - [DONE — commit REFACTOR utils.ts] Boot `matchMedia` ref hoisted to module-scope `reduceMotionMql` — listener removable for teardown/HMR — src/main.ts
 - [DONE — commit REFACTOR utils.ts] `src/motion.ts` folded into new `src/utils.ts`; `src/motion.ts` deleted — src/utils.ts, src/wheel.ts, src/main.ts
 
+### PR #16 — [FEAT] projector palette — vivid mid-dark colors, WCAG ink threshold (2026-06-14)
+
+- [ ] [debt] CSS grid still `repeat(4, 1fr)` after HTML removed 4th fstat item; fix to `repeat(3, 1fr)` (source: agy P2) — src/style.css:810
+- [ ] [debt] LABEL_INK threshold `0.1837` derived with wrong `L_dark≈0.052`; correct derivation gives `0.1860`; update threshold + comment in `inks.push(...)` (source: agy P2) — src/wheel.ts:48
+- [ ] [doc] DESIGN.md says `lum > 0.179` but code uses `0.1837`; sync to `0.186` after threshold fix above (source: agy P3) — DESIGN.md:35
+- [ ] [debt] index.html:239 "모든 참가자가 정확히 같은 확률" wrong when participants have different cumulativeWins/slots; reword to say each slot is unbiased not each participant (source: codex P2) — index.html:239
+
 ### PR #11 — [CHORE] clear tasks.md backlog — all 5 open items (2026-06-04)
 
 - [ ] [constraint] `encodeBackup` output stability — no snapshot/deterministic-seed assertion. `JSON.stringify` key order is V8-deterministic in practice but not spec-guaranteed; a small fixed-input snapshot test would cement the contract (source: review P3) — test/backup.test.ts

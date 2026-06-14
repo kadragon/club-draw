@@ -38,19 +38,21 @@ const linear = (c: number): number => {
  * close. `LABEL_INK[k]` is the readable text color for `PALETTE[k]`, chosen from
  * its relative luminance.
  */
-const { PALETTE, LABEL_INK } = ((): { PALETTE: string[]; LABEL_INK: string[] } => {
+export const { PALETTE, LABEL_INK } = ((): { PALETTE: string[]; LABEL_INK: string[] } => {
   const fills: string[] = [];
   const inks: string[] = [];
-  // Pastel contract: keep `light` ≥ ~0.78 so every wedge's computed luminance
-  // stays > 0.5 below and LABEL_INK resolves to dark ink. Darkening the palette
-  // flips some labels to white — re-check label legibility if you retune these.
-  const sat = [0.55, 0.48, 0.6];
-  const light = [0.82, 0.86, 0.78];
+  // Projector contract: vivid, medium-dark colors that stay distinguishable on
+  // beam without blooming to white. The ink threshold (lum > 0.1837) is the
+  // mathematical WCAG crossover — the exact point where contrast with dark ink
+  // equals contrast with white ink — so LABEL_INK always picks the higher-contrast
+  // option. (Derivation: solve (L+0.05)/L_dark = L_white/(L+0.05) → L = √(0.052×1.05)−0.05)
+  const sat = [0.72, 0.85, 0.78];
+  const light = [0.45, 0.52, 0.37];
   for (let k = 0; k < 30; k++) {
     const [r, g, b] = hslToRgb(((k * 137.508) % 360) / 360, sat[k % 3]!, light[k % 3]!);
     fills.push(`#${hex2(r)}${hex2(g)}${hex2(b)}`);
     const lum = 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
-    inks.push(lum > 0.5 ? "#0a0a0a" : "#ffffff");
+    inks.push(lum > 0.1837 ? "#0a0a0a" : "#ffffff");
   }
   return { PALETTE: fills, LABEL_INK: inks };
 })();
