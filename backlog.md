@@ -8,4 +8,6 @@
 
 ## Tech debt
 
+- [constraint] `encodeBackup` output stability — no snapshot/deterministic-seed assertion. `JSON.stringify` key order is V8-deterministic in practice but not spec-guaranteed; a small fixed-input snapshot test would cement the contract (source: PR #11 review P3) — test/backup.test.ts
+
 ## Ideas
