@@ -42,17 +42,17 @@ export const { PALETTE, LABEL_INK } = ((): { PALETTE: string[]; LABEL_INK: strin
   const fills: string[] = [];
   const inks: string[] = [];
   // Projector contract: vivid, medium-dark colors that stay distinguishable on
-  // beam without blooming to white. The ink threshold (lum > 0.1837) is the
+  // beam without blooming to white. The ink threshold (lum > 0.1860) is the
   // mathematical WCAG crossover — the exact point where contrast with dark ink
   // equals contrast with white ink — so LABEL_INK always picks the higher-contrast
-  // option. (Derivation: solve (L+0.05)/L_dark = L_white/(L+0.05) → L = √(0.052×1.05)−0.05)
+  // option. (Derivation: solve (L+0.05)/0.05 = 1.05/(L+0.05) → L = √(0.05×1.05)−0.05 ≈ 0.1860)
   const sat = [0.72, 0.85, 0.78];
   const light = [0.45, 0.52, 0.37];
   for (let k = 0; k < 30; k++) {
     const [r, g, b] = hslToRgb(((k * 137.508) % 360) / 360, sat[k % 3]!, light[k % 3]!);
     fills.push(`#${hex2(r)}${hex2(g)}${hex2(b)}`);
     const lum = 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
-    inks.push(lum > 0.1837 ? "#0a0a0a" : "#ffffff");
+    inks.push(lum > 0.186 ? "#0a0a0a" : "#ffffff");
   }
   return { PALETTE: fills, LABEL_INK: inks };
 })();
