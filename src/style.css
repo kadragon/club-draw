@@ -807,7 +807,7 @@ body {
 }
 .fairness-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   padding-top: 26px;
   border-top: 1px solid var(--hairline);
@@ -997,6 +997,9 @@ body.stage-mode .center-actions .btn {
   .fairness-stats {
     grid-template-columns: repeat(2, 1fr);
     gap: 14px 8px;
+  }
+  .fairness-stats > :last-child {
+    grid-column: span 2;
   }
 }
 
