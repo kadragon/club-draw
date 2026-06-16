@@ -998,6 +998,9 @@ body.stage-mode .center-actions .btn {
     grid-template-columns: repeat(2, 1fr);
     gap: 14px 8px;
   }
+  .fairness-stats > :last-child {
+    grid-column: span 2;
+  }
 }
 
 /* Confetti overlay — full-viewport, click-through. Class (not inline style) so

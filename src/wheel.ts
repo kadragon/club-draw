@@ -45,7 +45,7 @@ export const { PALETTE, LABEL_INK } = ((): { PALETTE: string[]; LABEL_INK: strin
   // beam without blooming to white. The ink threshold (lum > 0.1860) is the
   // mathematical WCAG crossover — the exact point where contrast with dark ink
   // equals contrast with white ink — so LABEL_INK always picks the higher-contrast
-  // option. (Derivation: solve (L+0.05)/0.05 = 1.05/(L+0.05) → L = √(0.05×1.05)−0.05 ≈ 0.1860)
+  // option. (Derivation: solve (L+0.05)/0.053 = 1.05/(L+0.05) where L_dark≈0.003 (#0a0a0a) → L = √(0.053×1.05)−0.05 ≈ 0.186)
   const sat = [0.72, 0.85, 0.78];
   const light = [0.45, 0.52, 0.37];
   for (let k = 0; k < 30; k++) {
