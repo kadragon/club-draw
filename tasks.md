@@ -54,7 +54,7 @@ Remaining lines are REJECTED (false positives) or DEFERRED (needs operator actio
 
 - [DONE — PR #18] CSS grid `repeat(4→3, 1fr)` — src/style.css:810
 - [DONE — PR #18] LABEL_INK threshold `0.1837→0.186`; comment derivation `0.053` (L_dark≈0.003 #0a0a0a) — src/wheel.ts:48
-- [ ] [doc] DESIGN.md says `lum > 0.179` but code uses `0.186`; sync — DESIGN.md:35
+- [DONE — PR #19] DESIGN.md `lum > 0.179` → `0.186` synced — DESIGN.md:35
 - [ ] [debt] index.html:239 "모든 참가자가 정확히 같은 확률" wrong when participants have different cumulativeWins/slots; reword to say each slot is unbiased not each participant (source: codex P2) — index.html:239
 
 ### PR #11 — [CHORE] clear tasks.md backlog — all 5 open items (2026-06-04)
