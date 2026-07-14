@@ -17,10 +17,10 @@
     "cf:dev": "bun run build && wrangler dev"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.2",
-    "typescript": "^6",
+    "@biomejs/biome": "2.5.3",
+    "typescript": "^7",
     "vite": "^8",
     "vitest": "^4.1.10",
-    "wrangler": "^4.107.0"
+    "wrangler": "^4.110.0"
   }
 }
