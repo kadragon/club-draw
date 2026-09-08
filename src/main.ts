@@ -21,7 +21,14 @@ import {
   wedgeAtPointer,
 } from "./draw.js";
 import { playFanfare, playTick, unlockAudio } from "./sound.js";
-import { type AppState, loadState, makeParticipant, makePrize, saveState } from "./state.js";
+import {
+  type AppState,
+  canDeleteParticipant,
+  loadState,
+  makeParticipant,
+  makePrize,
+  saveState,
+} from "./state.js";
 import { createWheel, getTailTime } from "./wheel.js";
 
 const TWO_PI = Math.PI * 2;
@@ -91,7 +98,9 @@ function downloadText(filename: string, text: string): void {
   a.download = filename;
   a.rel = "noopener";
   a.click();
-  URL.revokeObjectURL(url);
+  // Revoke on a later tick: Firefox reads the blob URL asynchronously after click(),
+  // so revoking synchronously can cancel the download before it starts.
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 /**
@@ -210,6 +219,10 @@ function renderParticipants() {
     del.title = "삭제";
     del.onclick = () => {
       if (spinLocked()) return;
+      if (!canDeleteParticipant(state, p.id)) {
+        els.status.textContent = "당첨자는 세션을 초기화한 뒤 삭제할 수 있습니다.";
+        return;
+      }
       state.participants = state.participants.filter((x) => x.id !== p.id);
       persist();
       renderParticipants();
@@ -317,7 +330,7 @@ function syncControls() {
   // In setup it stays gated with an explanatory tooltip; stage mode applies the
   // real prize/candidate gate.
   const inStage = document.body.classList.contains("stage-mode");
-  const canSpin = inStage && !!cur && cands.length > 0 && !wheel.isSpinning();
+  const canSpin = inStage && !!cur && cands.length > 0 && !spinLocked();
   els.spinBtn.setAttribute("aria-disabled", canSpin ? "false" : "true");
   els.spinBtn.title = inStage ? "" : "발표 모드에서 추첨을 시작할 수 있습니다";
   if (cur && cands.length === 0) {
@@ -502,6 +515,9 @@ els.rosterFile.addEventListener("change", () => {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => applyRoster(String(reader.result ?? ""));
+  reader.onerror = () => {
+    els.status.textContent = "파일 읽기 실패.";
+  };
   reader.readAsText(file);
   els.rosterFile.value = "";
 });
