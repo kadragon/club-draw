@@ -9,7 +9,20 @@ export interface AppState {
 
 const KEY = "club-draw:v1";
 
+/**
+ * Spin duration bounds (ms) — the single source for the clamp in {@link loadState},
+ * the settings-input handler, and the `#s-spin` min/max attributes (set from JS at
+ * boot; `index.html` carries the same numbers only as a no-JS fallback).
+ */
+export const SPIN_MS_MIN = 1000;
+export const SPIN_MS_MAX = 20000;
+
 export const DEFAULT_SETTINGS: Settings = { spinMs: 5000, sound: true };
+
+/** Clamp an arbitrary spin duration (ms) into the supported range. NaN → default. */
+export function clampSpinMs(ms: number): number {
+  return clampInt(ms, SPIN_MS_MIN, SPIN_MS_MAX, DEFAULT_SETTINGS.spinMs);
+}
 
 export function defaultState(): AppState {
   return { participants: [], prizes: [], settings: { ...DEFAULT_SETTINGS }, records: [] };
@@ -59,12 +72,7 @@ export function loadState(): AppState {
         }))
       : [];
     const settings: Settings = {
-      spinMs: clampInt(
-        Number((data.settings as Settings)?.spinMs),
-        1000,
-        20000,
-        DEFAULT_SETTINGS.spinMs,
-      ),
+      spinMs: clampSpinMs(Number((data.settings as Settings)?.spinMs)),
       sound: (data.settings as Settings)?.sound ?? DEFAULT_SETTINGS.sound,
     };
     const records = Array.isArray(data.records)

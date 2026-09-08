@@ -10,8 +10,8 @@ types.ts        도메인 모델만. 의존 없음.
    ↑
 draw.ts  csv.ts  state.ts   순수 로직 / 영속화. DOM 의존 없음.
    ↑       ↑        ↑
-wheel.ts confetti.ts sound.ts   브라우저 효과(Canvas/Audio).
-   ↑
+wheel.ts confetti.ts sound.ts   브라우저 효과(Canvas/Audio).   ui.ts   목록 DOM 생성.
+   ↑                                                              ↑
 main.ts         DOM 배선 + 오케스트레이션. 위 전부를 묶는 유일한 진입점.
 ```
 
@@ -27,6 +27,7 @@ main.ts         DOM 배선 + 오케스트레이션. 위 전부를 묶는 유일�
 | `src/csv.ts` | `parseRoster`·`recordsToCSV` | ✅ 테스트됨 |
 | `src/state.ts` | localStorage 로드/저장(`club-draw:v1`), 부분/손상 페이로드 허용 | ✅ |
 | `src/wheel.ts` | Canvas 렌더. 3시 기준 → `canvasAngle = φ − π/2` | 브라우저 |
+| `src/ui.ts` | 참가자·상품·기록 목록 DOM 생성(상태·정책 없음, `types.ts`만 의존) | 브라우저 |
 | `src/main.ts` | DOM·이벤트·스핀 시퀀스 오케스트레이션 | 브라우저 |
 | `src/confetti.ts`·`sound.ts` | 당첨 효과 | 브라우저 |
 | `public/_headers` | CSP allowlist (외부 CDN 추가 시 동기화) | — |

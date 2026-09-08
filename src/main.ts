@@ -24,11 +24,15 @@ import { playFanfare, playTick, unlockAudio } from "./sound.js";
 import {
   type AppState,
   canDeleteParticipant,
+  clampSpinMs,
   loadState,
   makeParticipant,
   makePrize,
+  SPIN_MS_MAX,
+  SPIN_MS_MIN,
   saveState,
 } from "./state.js";
+import { renderParticipantList, renderPrizeList, renderRecordList } from "./ui.js";
 import { createWheel, getTailTime } from "./wheel.js";
 
 const TWO_PI = Math.PI * 2;
@@ -195,126 +199,44 @@ function refreshIdle() {
 }
 
 // ── Rendering ───────────────────────────────────────────────────────────────
+// DOM construction lives in ui.ts; these wrappers bind it to the live state and
+// keep the delete policy (spin lock, delete eligibility, status text) here.
+
 function renderParticipants() {
-  els.pList.replaceChildren();
-  for (const p of state.participants) {
-    const li = document.createElement("li");
-    li.className = `list-item${p.excluded ? " is-won" : ""}`;
-    const name = document.createElement("span");
-    name.className = "li-name";
-    name.textContent = p.name;
-    li.appendChild(name);
-    if (p.cumulativeWins > 0) {
-      const badge = document.createElement("span");
-      badge.className = "li-badge";
-      badge.textContent = `누적 ${p.cumulativeWins}`;
-      li.appendChild(badge);
+  renderParticipantList(els.pList, state.participants, (p) => {
+    if (spinLocked()) return;
+    if (!canDeleteParticipant(state, p.id)) {
+      els.status.textContent = "당첨자는 세션을 초기화한 뒤 삭제할 수 있습니다.";
+      return;
     }
-    if (p.excluded) {
-      const won = document.createElement("span");
-      won.className = "li-badge";
-      won.textContent = "당첨";
-      li.appendChild(won);
-    }
-    const del = document.createElement("button");
-    del.className = "li-del";
-    del.type = "button";
-    del.textContent = "×";
-    del.title = "삭제";
-    del.onclick = () => {
-      if (spinLocked()) return;
-      if (!canDeleteParticipant(state, p.id)) {
-        els.status.textContent = "당첨자는 세션을 초기화한 뒤 삭제할 수 있습니다.";
-        return;
-      }
-      state.participants = state.participants.filter((x) => x.id !== p.id);
-      persist();
-      renderParticipants();
-      rebuildWheel();
-      syncControls();
-    };
-    li.appendChild(del);
-    els.pList.appendChild(li);
-  }
+    state.participants = state.participants.filter((x) => x.id !== p.id);
+    persist();
+    renderParticipants();
+    rebuildWheel();
+    syncControls();
+  });
 }
 
 function renderPrizes() {
-  els.zList.replaceChildren();
-  const cur = currentPrize();
-  for (const z of state.prizes) {
-    const li = document.createElement("li");
-    li.className = `list-item${z.drawn ? " is-won" : ""}${z === cur ? " is-current" : ""}`;
-    const name = document.createElement("span");
-    name.className = "li-name";
-    name.textContent = z.name;
-    li.appendChild(name);
-    if (z.drawn && z.winnerId) {
-      const w = state.participants.find((p) => p.id === z.winnerId);
-      if (w) {
-        const badge = document.createElement("span");
-        badge.className = "li-badge";
-        badge.textContent = w.name;
-        li.appendChild(badge);
-      }
+  renderPrizeList(els.zList, state.prizes, state.participants, currentPrize(), (z) => {
+    if (spinLocked()) return;
+    // Symmetric with the participant guard: a drawn prize is the winner's only
+    // back-reference. Deleting it strands them excluded-but-unspinnable and, since
+    // the participant guard then still fires on `excluded`, undeletable too.
+    if (z.drawn) {
+      els.status.textContent = "추첨된 상품은 세션을 초기화한 뒤 삭제할 수 있습니다.";
+      return;
     }
-    const del = document.createElement("button");
-    del.className = "li-del";
-    del.type = "button";
-    del.textContent = "×";
-    del.title = "삭제";
-    del.onclick = () => {
-      if (spinLocked()) return;
-      // Symmetric with the participant guard: a drawn prize is the winner's only
-      // back-reference. Deleting it strands them excluded-but-unspinnable and, since
-      // the participant guard then still fires on `excluded`, undeletable too.
-      if (z.drawn) {
-        els.status.textContent = "추첨된 상품은 세션을 초기화한 뒤 삭제할 수 있습니다.";
-        return;
-      }
-      state.prizes = state.prizes.filter((x) => x.id !== z.id);
-      persist();
-      renderPrizes();
-      syncControls();
-      refreshIdle(); // removing the last pending prize must stop idle drift
-    };
-    li.appendChild(del);
-    els.zList.appendChild(li);
-  }
+    state.prizes = state.prizes.filter((x) => x.id !== z.id);
+    persist();
+    renderPrizes();
+    syncControls();
+    refreshIdle(); // removing the last pending prize must stop idle drift
+  });
 }
 
 function renderRecords() {
-  els.recordList.replaceChildren();
-  if (state.records.length === 0) {
-    const empty = document.createElement("li");
-    empty.className = "empty";
-    empty.textContent = "아직 당첨자가 없습니다";
-    els.recordList.appendChild(empty);
-    return;
-  }
-  for (const r of state.records) {
-    const li = document.createElement("li");
-    li.className = "record";
-    const top = document.createElement("div");
-    top.className = "record-top";
-    const winner = document.createElement("span");
-    winner.className = "record-winner";
-    winner.textContent = r.winner;
-    const prize = document.createElement("span");
-    prize.className = "record-prize";
-    prize.textContent = r.prize;
-    top.append(winner, prize);
-    const at = document.createElement("span");
-    at.className = "record-at";
-    at.textContent = formatTime(r.at);
-    li.append(top, at);
-    els.recordList.appendChild(li);
-  }
-}
-
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("ko-KR", { hour12: false });
+  renderRecordList(els.recordList, state.records);
 }
 
 function syncControls() {
@@ -536,11 +458,11 @@ els.rosterFile.addEventListener("change", () => {
   els.rosterFile.value = "";
 });
 
+// Bounds live in state.ts; the HTML attributes are only a no-JS fallback.
+els.sSpin.min = String(SPIN_MS_MIN / 1000);
+els.sSpin.max = String(SPIN_MS_MAX / 1000);
 els.sSpin.addEventListener("change", () => {
-  state.settings.spinMs = Math.min(
-    20000,
-    Math.max(1000, Math.round((Number(els.sSpin.value) || 5) * 1000)),
-  );
+  state.settings.spinMs = clampSpinMs(Number(els.sSpin.value) * 1000);
   persist();
 });
 els.sSound.addEventListener("change", () => {

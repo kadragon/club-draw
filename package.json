@@ -1,6 +1,6 @@
 {
   "name": "club-draw",
-  "version": "1.9.14",
+  "version": "1.9.15",
   "type": "module",
   "private": true,
   "scripts": {
@@ -10,9 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check src test",
-    "lint:fix": "biome check --write src test",
-    "format": "biome format --write src test",
+    "lint": "biome check",
+    "lint:fix": "biome check --write",
+    "format": "biome format --write",
     "deploy": "bun run build && wrangler deploy",
     "cf:dev": "bun run build && wrangler dev"
   },

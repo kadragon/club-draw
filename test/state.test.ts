@@ -1,5 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { canDeleteParticipant } from "../src/state.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  canDeleteParticipant,
+  DEFAULT_SETTINGS,
+  defaultState,
+  loadState,
+  SPIN_MS_MAX,
+  SPIN_MS_MIN,
+} from "../src/state.js";
 import type { Participant, Prize } from "../src/types.js";
 
 const p = (id: string, over: Partial<Participant> = {}): Participant => ({
@@ -36,5 +43,110 @@ describe("canDeleteParticipant", () => {
 
   it("allows deleting an unknown id (already gone — nothing to protect)", () => {
     expect(canDeleteParticipant({ participants: [], prizes: [] }, "ghost")).toBe(true);
+  });
+});
+
+// ── loadState ───────────────────────────────────────────────────────────────
+// Runs in the `node` test environment (vite.config.ts), so localStorage is stubbed.
+const KEY = "club-draw:v1";
+let store: Map<string, string>;
+
+beforeEach(() => {
+  store = new Map();
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+      clear: () => store.clear(),
+    },
+  });
+});
+
+afterEach(() => {
+  Reflect.deleteProperty(globalThis, "localStorage");
+});
+
+const put = (payload: unknown) => store.set(KEY, JSON.stringify(payload));
+
+describe("loadState", () => {
+  it("returns the default state when nothing is persisted", () => {
+    expect(loadState()).toEqual(defaultState());
+  });
+
+  it("returns the default state on unparseable JSON", () => {
+    store.set(KEY, "{not json");
+    expect(loadState()).toEqual(defaultState());
+  });
+
+  it("returns the default state on a non-object payload", () => {
+    put([1, 2, 3]);
+    expect(loadState()).toEqual(defaultState());
+  });
+
+  it("clamps a negative cumulativeWins to 0 (a negative value would INVERT the handicap)", () => {
+    put({ participants: [{ id: "a", name: "A", cumulativeWins: -5 }] });
+    expect(loadState().participants[0]?.cumulativeWins).toBe(0);
+  });
+
+  it("floors a fractional cumulativeWins and defaults a non-numeric one to 0", () => {
+    put({
+      participants: [
+        { id: "a", name: "A", cumulativeWins: 2.9 },
+        { id: "b", name: "B", cumulativeWins: "oops" },
+        { id: "c", name: "C" },
+      ],
+    });
+    expect(loadState().participants.map((p) => p.cumulativeWins)).toEqual([2, 0, 0]);
+  });
+
+  it("drops non-object entries and coerces missing participant fields", () => {
+    put({ participants: [null, "x", { name: 42 }] });
+    const [only, ...rest] = loadState().participants;
+    expect(rest).toEqual([]);
+    expect(only?.name).toBe("42");
+    expect(only?.id).toBeTruthy(); // generated
+    expect(only?.excluded).toBe(false);
+  });
+
+  it("falls back to empty arrays when the collections are not arrays", () => {
+    put({ participants: {}, prizes: "nope", records: 7 });
+    const s = loadState();
+    expect([s.participants, s.prizes, s.records]).toEqual([[], [], []]);
+  });
+
+  it("keeps a spinMs inside the supported range", () => {
+    put({ settings: { spinMs: 7500, sound: false } });
+    expect(loadState().settings).toEqual({ spinMs: 7500, sound: false });
+  });
+
+  it("clamps spinMs to the SPIN_MS bounds and falls back on a non-finite value", () => {
+    put({ settings: { spinMs: SPIN_MS_MIN - 1 } });
+    expect(loadState().settings.spinMs).toBe(SPIN_MS_MIN);
+    put({ settings: { spinMs: SPIN_MS_MAX + 1 } });
+    expect(loadState().settings.spinMs).toBe(SPIN_MS_MAX);
+    put({ settings: { spinMs: "fast" } });
+    expect(loadState().settings.spinMs).toBe(DEFAULT_SETTINGS.spinMs);
+  });
+
+  it("defaults a missing settings block", () => {
+    put({ participants: [] });
+    expect(loadState().settings).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it("ignores a legacy persisted baseSlots key (base is always recomputed)", () => {
+    put({ baseSlots: 99, participants: [{ id: "a", name: "A", cumulativeWins: 1 }] });
+    expect(loadState()).not.toHaveProperty("baseSlots");
+  });
+
+  it("preserves prize winner links and records", () => {
+    put({
+      prizes: [{ id: "z", name: "gift", drawn: true, winnerId: "a" }],
+      records: [{ prize: "gift", winner: "A", winnerId: "a", at: "2026-01-01T00:00:00.000Z" }],
+    });
+    const s = loadState();
+    expect(s.prizes[0]).toEqual({ id: "z", name: "gift", drawn: true, winnerId: "a" });
+    expect(s.records[0]?.winnerId).toBe("a");
   });
 });
