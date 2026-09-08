@@ -21,6 +21,7 @@ import {
   type WinnerResult,
   wedgeAtPointer,
 } from "./draw.js";
+import { createMotionPreference } from "./motion.js";
 import { playFanfare, playTick, unlockAudio } from "./sound.js";
 import {
   type AppState,
@@ -187,6 +188,8 @@ function spinLocked(): boolean {
   return wheel.isSpinning() || isRevealing;
 }
 
+const motion = createMotionPreference();
+
 /**
  * The wheel drifts slowly while idle so the stage feels alive. Allowed only when
  * a draw is actually possible and nothing else owns the wheel: a pending prize
@@ -194,10 +197,15 @@ function spinLocked(): boolean {
  * Without the pending-prize gate the idle RAF
  * would run forever in a finished session (all prizes drawn) with nothing to spin.
  * Re-evaluated after every state change that could flip one of those conditions.
+ * Unprompted ambient motion is also skipped entirely under `prefers-reduced-motion`.
  */
 function refreshIdle() {
   const allowed =
-    els.overlay.hidden && !spinLocked() && currentPrize() !== null && liveCandidates().length > 0;
+    els.overlay.hidden &&
+    !spinLocked() &&
+    currentPrize() !== null &&
+    liveCandidates().length > 0 &&
+    !motion.reduced();
   wheel.setIdle(allowed);
 }
 
@@ -418,7 +426,9 @@ function onWin(winnerId: string, prizeId: string) {
   persist();
 
   if (state.settings.sound) playFanfare();
-  fireConfetti();
+  // Full-screen particle burst — the one motion a reduced-motion viewer never asked
+  // for (the spin itself follows their own START press).
+  if (!motion.reduced()) fireConfetti();
 
   els.winnerName.textContent = winner.name;
   els.winnerPrize.textContent = prize.name;
@@ -698,6 +708,9 @@ els.restoreFile.addEventListener("change", () => {
 });
 
 window.addEventListener("resize", () => wheel.render());
+
+// Toggling the OS setting mid-session must start/stop the drift without a reload.
+motion.subscribe(refreshIdle);
 
 // Dev-only verification seam (stripped from production build): lets an automated
 // browser check confirm the canvas rotation actually lands the chosen winner
