@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { mergeSessionWins, parseRoster, participantsToCSV, recordsToCSV } from "../src/csv.js";
+import {
+  mergeSessionWins,
+  parseRoster,
+  participantsToCSV,
+  recordsToCSV,
+  splitDuplicateRows,
+} from "../src/csv.js";
 import type { DrawRecord, Participant } from "../src/types.js";
 
 describe("parseRoster", () => {
@@ -145,5 +151,62 @@ describe("mergeSessionWins", () => {
     const merged = mergeSessionWins(dupes, [recId("a", "Bob")]);
     expect(merged.find((p) => p.id === "a")?.cumulativeWins).toBe(1);
     expect(merged.find((p) => p.id === "b")?.cumulativeWins).toBe(0);
+  });
+});
+
+describe("splitDuplicateRows", () => {
+  const roster = (...names: string[]): Participant[] =>
+    names.map((name) => ({ id: name, name, cumulativeWins: 0, excluded: false }));
+
+  it("keeps every row when no name collides", () => {
+    const rows = [
+      { name: "Alice", cumulativeWins: 0 },
+      { name: "Bob", cumulativeWins: 1 },
+    ];
+    expect(splitDuplicateRows(roster("Carol"), rows)).toEqual({ fresh: rows, duplicates: [] });
+  });
+
+  it("drops rows whose name is already on the roster", () => {
+    const rows = [
+      { name: "Alice", cumulativeWins: 0 },
+      { name: "Bob", cumulativeWins: 1 },
+    ];
+    expect(splitDuplicateRows(roster("Alice"), rows)).toEqual({
+      fresh: [{ name: "Bob", cumulativeWins: 1 }],
+      duplicates: ["Alice"],
+    });
+  });
+
+  it("drops a name repeated within the same batch", () => {
+    const rows = [
+      { name: "Alice", cumulativeWins: 0 },
+      { name: "Alice", cumulativeWins: 3 },
+    ];
+    expect(splitDuplicateRows([], rows)).toEqual({
+      fresh: [{ name: "Alice", cumulativeWins: 0 }],
+      duplicates: ["Alice"],
+    });
+  });
+
+  it("reports each duplicate name once, in first-seen order", () => {
+    const rows = [
+      { name: "Bob", cumulativeWins: 0 },
+      { name: "Alice", cumulativeWins: 0 },
+      { name: "Bob", cumulativeWins: 0 },
+    ];
+    expect(splitDuplicateRows(roster("Alice", "Bob"), rows).duplicates).toEqual(["Bob", "Alice"]);
+  });
+
+  it("treats a re-import of the whole roster as all duplicates", () => {
+    const rows = [
+      { name: "Alice", cumulativeWins: 2 },
+      { name: "Bob", cumulativeWins: 0 },
+    ];
+    expect(splitDuplicateRows(roster("Alice", "Bob"), rows).fresh).toEqual([]);
+  });
+
+  it("does not fold case — a deliberate case variant still imports", () => {
+    const rows = [{ name: "alice", cumulativeWins: 0 }];
+    expect(splitDuplicateRows(roster("Alice"), rows)).toEqual({ fresh: rows, duplicates: [] });
   });
 });

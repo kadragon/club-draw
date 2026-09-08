@@ -21,6 +21,21 @@ function nameSpan(text: string): HTMLSpanElement {
   return el;
 }
 
+/**
+ * Keep a row button's click alive while the carry-over editor is open.
+ *
+ * Without this, mousedown moves focus off the editor, its blur commits and the
+ * caller re-renders the whole list — so the button is gone before `click` fires and
+ * the delete/edit is silently swallowed. Suppressing the focus shift keeps the
+ * editor open until the click lands; the action's own re-render then closes it,
+ * discarding a typed-but-uncommitted value (Enter, Tab, or clicking outside the
+ * list still commit it).
+ */
+function keepClickAlive(btn: HTMLButtonElement): HTMLButtonElement {
+  btn.onmousedown = (e) => e.preventDefault();
+  return btn;
+}
+
 function deleteButton(onClick: () => void): HTMLButtonElement {
   const del = document.createElement("button");
   del.className = "li-del";
@@ -28,25 +43,93 @@ function deleteButton(onClick: () => void): HTMLButtonElement {
   del.textContent = "×";
   del.title = "삭제";
   del.onclick = onClick;
-  return del;
+  return keepClickAlive(del);
 }
 
-/** Roster list: name, carry-over badge, session-winner badge, delete control. */
+function editButton(onClick: () => void): HTMLButtonElement {
+  const edit = document.createElement("button");
+  edit.className = "li-edit";
+  edit.type = "button";
+  edit.textContent = "✎";
+  edit.title = "누적 당첨 수정";
+  edit.setAttribute("aria-label", "누적 당첨 수정");
+  edit.onclick = onClick;
+  return keepClickAlive(edit);
+}
+
+/**
+ * Inline editor for the carry-over count. Commits on Enter/blur and cancels on
+ * Escape; both paths report through the same callback (`null` = cancel) so the
+ * caller only has to re-render. `commit` is one-shot because Enter blurs the
+ * field, which would otherwise fire the handler a second time.
+ */
+function winsInput(value: number, onDone: (next: number | null) => void): HTMLInputElement {
+  const input = document.createElement("input");
+  input.className = "li-wins-input";
+  input.type = "number";
+  input.min = "0";
+  input.step = "1";
+  input.value = String(value);
+  input.title = "누적 당첨 수";
+  input.setAttribute("aria-label", "누적 당첨 수");
+  let done = false;
+  const finish = (next: number | null) => {
+    if (done) return;
+    done = true;
+    onDone(next);
+  };
+  input.onkeydown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      finish(Number(input.value));
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      finish(null);
+    }
+  };
+  input.onblur = () => finish(Number(input.value));
+  return input;
+}
+
+/**
+ * Carry-over editing hooks. The caller owns `editingId` (which row shows the input)
+ * so this module stays stateless: `onStart` asks it to flip that id and re-render,
+ * `onDone` delivers the committed value or `null` for a cancel — in both cases the
+ * caller clears `editingId` and re-renders, which is what closes the editor.
+ */
+export interface WinsEditor {
+  editingId: string | null;
+  onStart: (participant: Participant) => void;
+  onDone: (participant: Participant, next: number | null) => void;
+}
+
+/** Roster list: name, carry-over badge, session-winner badge, edit and delete controls. */
 export function renderParticipantList(
   el: HTMLElement,
   participants: readonly Participant[],
   onDelete: (participant: Participant) => void,
+  editor?: WinsEditor,
 ): void {
   el.replaceChildren();
+  let focusTarget: HTMLInputElement | null = null;
   for (const p of participants) {
     const li = document.createElement("li");
     li.className = `list-item${p.excluded ? " is-won" : ""}`;
     li.appendChild(nameSpan(p.name));
-    if (p.cumulativeWins > 0) li.appendChild(badge(`누적 ${p.cumulativeWins}`));
+    if (editor && editor.editingId === p.id) {
+      focusTarget = winsInput(p.cumulativeWins, (next) => editor.onDone(p, next));
+      li.appendChild(focusTarget);
+    } else if (p.cumulativeWins > 0) {
+      li.appendChild(badge(`누적 ${p.cumulativeWins}`));
+    }
     if (p.excluded) li.appendChild(badge("당첨"));
+    if (editor) li.appendChild(editButton(() => editor.onStart(p)));
     li.appendChild(deleteButton(() => onDelete(p)));
     el.appendChild(li);
   }
+  // Focus only once the input is in the document — a detached node cannot take it.
+  focusTarget?.focus();
+  focusTarget?.select();
 }
 
 /**

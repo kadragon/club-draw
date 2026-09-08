@@ -186,6 +186,39 @@ export function parseRoster(text: string): RosterRow[] {
   return rows;
 }
 
+/** {@link splitDuplicateRows} result: rows safe to append, and the names that collided. */
+export interface RosterSplit {
+  fresh: RosterRow[];
+  duplicates: string[];
+}
+
+/**
+ * Split parsed roster rows into the ones that introduce a new name and the ones
+ * whose name is already taken — by the live roster, or by an earlier row in the
+ * same batch (a CSV can repeat a name on its own).
+ *
+ * Names are matched exactly as parsed (already trimmed); no case or whitespace
+ * folding, so a deliberate "Kim"/"kim" pair still imports. Order is preserved in
+ * both lists and `duplicates` is de-duplicated for display.
+ */
+export function splitDuplicateRows(
+  existing: readonly Participant[],
+  rows: readonly RosterRow[],
+): RosterSplit {
+  const seen = new Set(existing.map((p) => p.name));
+  const fresh: RosterRow[] = [];
+  const duplicates: string[] = [];
+  for (const row of rows) {
+    if (seen.has(row.name)) {
+      if (!duplicates.includes(row.name)) duplicates.push(row.name);
+      continue;
+    }
+    seen.add(row.name);
+    fresh.push(row);
+  }
+  return { fresh, duplicates };
+}
+
 /** Serialize participants to CSV with a header row (formula-guarded, roundtrip-safe). */
 export function participantsToCSV(participants: readonly Participant[]): string {
   const lines = ["name,cumulativeWins"];
