@@ -97,10 +97,14 @@ function downloadText(filename: string, text: string): void {
   a.href = url;
   a.download = filename;
   a.rel = "noopener";
+  // Firefox needs the anchor in the document for a programmatic click, and it reads
+  // the blob URL asynchronously afterwards — revoking on the next macrotask can still
+  // land before the download task is queued (FileSaver.js settled on a delay for the
+  // same case). Hold the URL for a second; it is one small text blob.
+  document.body.appendChild(a);
   a.click();
-  // Revoke on a later tick: Firefox reads the blob URL asynchronously after click(),
-  // so revoking synchronously can cancel the download before it starts.
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /**
@@ -260,6 +264,13 @@ function renderPrizes() {
     del.title = "삭제";
     del.onclick = () => {
       if (spinLocked()) return;
+      // Symmetric with the participant guard: a drawn prize is the winner's only
+      // back-reference. Deleting it strands them excluded-but-unspinnable and, since
+      // the participant guard then still fires on `excluded`, undeletable too.
+      if (z.drawn) {
+        els.status.textContent = "추첨된 상품은 세션을 초기화한 뒤 삭제할 수 있습니다.";
+        return;
+      }
       state.prizes = state.prizes.filter((x) => x.id !== z.id);
       persist();
       renderPrizes();
@@ -499,7 +510,10 @@ els.zForm.addEventListener("submit", (e) => {
 function applyRoster(text: string) {
   if (spinLocked()) return; // guard the async FileReader path too, not just the call sites
   const rows = parseRoster(text);
-  if (rows.length === 0) return;
+  if (rows.length === 0) {
+    els.status.textContent = "가져올 명단이 없습니다.";
+    return;
+  }
   for (const row of rows) state.participants.push(makeParticipant(row.name, row.cumulativeWins));
   els.rosterText.value = "";
   persist();
