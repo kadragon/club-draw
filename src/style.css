@@ -903,8 +903,10 @@ body {
 }
 
 /* ── Reduced motion ────────────────────────────────────────────────────────
-   Strip decorative CSS animation/transition. Canvas-driven motion (spin,
-   idle drift, reveal pulse) is not gated here — JS handles it via spinMs. */
+   Strip decorative CSS animation/transition. Canvas- and JS-driven motion is
+   invisible to this block, so `src/motion.ts` reads the same query from JS and
+   main.ts gates it there: idle drift and the confetti burst are skipped. The spin
+   (and its reveal pulse) stays — the viewer asked for it by pressing START. */
 @media (prefers-reduced-motion: reduce) {
   .overlay,
   .overlay-card,
