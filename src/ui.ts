@@ -21,6 +21,21 @@ function nameSpan(text: string): HTMLSpanElement {
   return el;
 }
 
+/**
+ * Keep a row button's click alive while the carry-over editor is open.
+ *
+ * Without this, mousedown moves focus off the editor, its blur commits and the
+ * caller re-renders the whole list — so the button is gone before `click` fires and
+ * the delete/edit is silently swallowed. Suppressing the focus shift keeps the
+ * editor open until the click lands; the action's own re-render then closes it,
+ * discarding a typed-but-uncommitted value (Enter, Tab, or clicking outside the
+ * list still commit it).
+ */
+function keepClickAlive(btn: HTMLButtonElement): HTMLButtonElement {
+  btn.onmousedown = (e) => e.preventDefault();
+  return btn;
+}
+
 function deleteButton(onClick: () => void): HTMLButtonElement {
   const del = document.createElement("button");
   del.className = "li-del";
@@ -28,7 +43,7 @@ function deleteButton(onClick: () => void): HTMLButtonElement {
   del.textContent = "×";
   del.title = "삭제";
   del.onclick = onClick;
-  return del;
+  return keepClickAlive(del);
 }
 
 function editButton(onClick: () => void): HTMLButtonElement {
@@ -39,7 +54,7 @@ function editButton(onClick: () => void): HTMLButtonElement {
   edit.title = "누적 당첨 수정";
   edit.setAttribute("aria-label", "누적 당첨 수정");
   edit.onclick = onClick;
-  return edit;
+  return keepClickAlive(edit);
 }
 
 /**
