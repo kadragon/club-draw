@@ -24,6 +24,34 @@ export function clampSpinMs(ms: number): number {
   return clampInt(ms, SPIN_MS_MIN, SPIN_MS_MAX, DEFAULT_SETTINGS.spinMs);
 }
 
+/**
+ * Clamp an operator-entered carry-over to a non-negative integer.
+ *
+ * A negative value would invert `slotsFor` (max(1, base − wins)) and raise the
+ * participant's odds instead of lowering them; NaN would poison the wheel layout.
+ * Single source for the persisted-payload sanitizer and the inline editor.
+ */
+export function normalizeWins(v: number): number {
+  return Math.max(0, Math.floor(Number(v) || 0));
+}
+
+/**
+ * Set one participant's carry-over total, returning a NEW array (input untouched).
+ * The value is operator-entered, so it is normalized here rather than at the call
+ * site. An unknown id, or a value that normalizes to the current one, returns the
+ * original array — callers can skip a persist on identity.
+ */
+export function setParticipantWins(
+  participants: readonly Participant[],
+  id: string,
+  wins: number,
+): Participant[] {
+  const next = normalizeWins(wins);
+  const target = participants.find((p) => p.id === id);
+  if (!target || target.cumulativeWins === next) return participants as Participant[];
+  return participants.map((p) => (p.id === id ? { ...p, cumulativeWins: next } : p));
+}
+
 export function defaultState(): AppState {
   return { participants: [], prizes: [], settings: { ...DEFAULT_SETTINGS }, records: [] };
 }
@@ -57,9 +85,7 @@ export function loadState(): AppState {
       ? (data.participants as unknown[]).filter(isObj).map((p) => ({
           id: String(p.id ?? uid()),
           name: String(p.name ?? ""),
-          // Clamp to a non-negative integer: a negative value would invert slotsFor
-          // (max(1, base − wins)) and raise the participant's odds instead of lowering them.
-          cumulativeWins: Math.max(0, Math.floor(Number(p.cumulativeWins) || 0)),
+          cumulativeWins: normalizeWins(Number(p.cumulativeWins)),
           excluded: Boolean(p.excluded),
         }))
       : [];

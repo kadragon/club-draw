@@ -4,8 +4,10 @@ import {
   DEFAULT_SETTINGS,
   defaultState,
   loadState,
+  normalizeWins,
   SPIN_MS_MAX,
   SPIN_MS_MIN,
+  setParticipantWins,
 } from "../src/state.js";
 import type { Participant, Prize } from "../src/types.js";
 
@@ -148,5 +150,52 @@ describe("loadState", () => {
     const s = loadState();
     expect(s.prizes[0]).toEqual({ id: "z", name: "gift", drawn: true, winnerId: "a" });
     expect(s.records[0]?.winnerId).toBe("a");
+  });
+});
+
+describe("normalizeWins", () => {
+  it("clamps a negative carry-over to 0", () => {
+    expect(normalizeWins(-3)).toBe(0);
+  });
+
+  it("floors a fractional value", () => {
+    expect(normalizeWins(2.9)).toBe(2);
+  });
+
+  it("falls back to 0 for NaN", () => {
+    expect(normalizeWins(Number.NaN)).toBe(0);
+  });
+
+  it("passes a non-negative integer through", () => {
+    expect(normalizeWins(4)).toBe(4);
+  });
+});
+
+describe("setParticipantWins", () => {
+  it("updates only the named participant and leaves the input untouched", () => {
+    const participants = [p("a", { cumulativeWins: 1 }), p("b", { cumulativeWins: 2 })];
+    const next = setParticipantWins(participants, "a", 5);
+    expect(next.map((x) => x.cumulativeWins)).toEqual([5, 2]);
+    expect(participants[0]!.cumulativeWins).toBe(1);
+  });
+
+  it("normalizes the entered value", () => {
+    const next = setParticipantWins([p("a", { cumulativeWins: 1 })], "a", -2);
+    expect(next[0]!.cumulativeWins).toBe(0);
+  });
+
+  it("returns the original array for an unknown id", () => {
+    const participants = [p("a")];
+    expect(setParticipantWins(participants, "zz", 3)).toBe(participants);
+  });
+
+  it("returns the original array when the value is unchanged", () => {
+    const participants = [p("a", { cumulativeWins: 2 })];
+    expect(setParticipantWins(participants, "a", 2.4)).toBe(participants);
+  });
+
+  it("preserves the excluded flag", () => {
+    const next = setParticipantWins([p("a", { excluded: true })], "a", 3);
+    expect(next[0]!.excluded).toBe(true);
   });
 });

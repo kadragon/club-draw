@@ -9,6 +9,7 @@ import {
   parseRoster,
   participantsToCSV,
   recordsToCSV,
+  splitDuplicateRows,
 } from "./csv.js";
 import {
   buildWheel,
@@ -32,6 +33,7 @@ import {
   SPIN_MS_MAX,
   SPIN_MS_MIN,
   saveState,
+  setParticipantWins,
 } from "./state.js";
 import { renderParticipantList, renderPrizeList, renderRecordList } from "./ui.js";
 import { createWheel, getTailTime } from "./wheel.js";
@@ -203,19 +205,57 @@ function refreshIdle() {
 // DOM construction lives in ui.ts; these wrappers bind it to the live state and
 // keep the delete policy (spin lock, delete eligibility, status text) here.
 
+/**
+ * Which roster row is showing its inline carry-over editor. Held here rather than in
+ * ui.ts so every re-render (delete, import, session reset) closes a stale editor.
+ */
+let editingWinsId: string | null = null;
+
 function renderParticipants() {
-  renderParticipantList(els.pList, state.participants, (p) => {
-    if (spinLocked()) return;
-    if (!canDeleteParticipant(state, p.id)) {
-      els.status.textContent = "당첨자는 세션을 초기화한 뒤 삭제할 수 있습니다.";
-      return;
-    }
-    state.participants = state.participants.filter((x) => x.id !== p.id);
-    persist();
-    renderParticipants();
-    rebuildWheel();
-    syncControls();
-  });
+  renderParticipantList(
+    els.pList,
+    state.participants,
+    (p) => {
+      if (spinLocked()) return;
+      if (!canDeleteParticipant(state, p.id)) {
+        els.status.textContent = "당첨자는 세션을 초기화한 뒤 삭제할 수 있습니다.";
+        return;
+      }
+      state.participants = state.participants.filter((x) => x.id !== p.id);
+      editingWinsId = null;
+      persist();
+      renderParticipants();
+      rebuildWheel();
+      syncControls();
+    },
+    {
+      editingId: editingWinsId,
+      // The carry-over drives slot counts, so editing it mid-spin would desync the
+      // visible stop from the chosen winner — same gate as delete.
+      onStart: (p) => {
+        if (spinLocked()) return;
+        editingWinsId = p.id;
+        renderParticipants();
+      },
+      onDone: (p, next) => {
+        editingWinsId = null;
+        if (next === null || spinLocked()) {
+          renderParticipants();
+          return;
+        }
+        const updated = setParticipantWins(state.participants, p.id, next);
+        if (updated === state.participants) {
+          renderParticipants();
+          return;
+        }
+        state.participants = updated;
+        persist();
+        renderParticipants();
+        rebuildWheel();
+        syncControls();
+      },
+    },
+  );
 }
 
 function renderPrizes() {
@@ -430,28 +470,56 @@ els.zForm.addEventListener("submit", (e) => {
   refreshIdle(); // a first/again-available prize may now permit idle drift
 });
 
-function applyRoster(text: string) {
+/**
+ * Import a pasted/loaded roster, appending only names the roster does not already
+ * have. Without the duplicate gate, re-importing the same CSV silently doubles the
+ * roster and the doubled entries go straight into the draw.
+ */
+async function applyRoster(text: string) {
   if (spinLocked()) return; // guard the async FileReader path too, not just the call sites
   const rows = parseRoster(text);
   if (rows.length === 0) {
     els.status.textContent = "가져올 명단이 없습니다.";
     return;
   }
-  for (const row of rows) state.participants.push(makeParticipant(row.name, row.cumulativeWins));
+  const { fresh, duplicates } = splitDuplicateRows(state.participants, rows);
+  if (duplicates.length > 0) {
+    const sample = duplicates.slice(0, 5).join(", ");
+    const more = duplicates.length > 5 ? " 외" : "";
+    const ok = await confirmModal(
+      `이미 명단에 있는 이름 ${duplicates.length}명(${sample}${more})이 포함되어 있습니다.` +
+        ` 중복을 제외하고 ${fresh.length}명만 추가할까요?`,
+    );
+    if (!ok) return;
+    // The modal is awaited, so a spin could have started while it was open.
+    if (spinLocked()) return;
+  }
+  if (fresh.length === 0) {
+    els.status.textContent = "추가할 새 이름이 없습니다.";
+    return;
+  }
+  for (const row of fresh) state.participants.push(makeParticipant(row.name, row.cumulativeWins));
   els.rosterText.value = "";
   persist();
   renderParticipants();
   rebuildWheel();
   syncControls();
-  els.status.textContent = `${rows.length}명 추가됨`;
+  els.status.textContent =
+    duplicates.length > 0
+      ? `${fresh.length}명 추가됨 · 중복 ${duplicates.length}명 제외`
+      : `${fresh.length}명 추가됨`;
 }
 
-els.rosterApply.addEventListener("click", () => applyRoster(els.rosterText.value));
+els.rosterApply.addEventListener("click", () => {
+  void applyRoster(els.rosterText.value);
+});
 els.rosterFile.addEventListener("change", () => {
   const file = els.rosterFile.files?.[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = () => applyRoster(String(reader.result ?? ""));
+  reader.onload = () => {
+    void applyRoster(String(reader.result ?? ""));
+  };
   reader.onerror = () => {
     els.status.textContent = "파일 읽기 실패.";
   };

@@ -363,7 +363,19 @@ body {
   border-radius: var(--radius-pill);
   padding: 2px 8px;
 }
-.li-del {
+.li-wins-input {
+  width: 4.5em;
+  font: inherit;
+  font-size: 12.5px;
+  font-feature-settings: "tnum";
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+}
+.li-del,
+.li-edit {
   border: none;
   background: none;
   color: var(--muted-soft);
@@ -374,6 +386,16 @@ body {
 }
 .li-del:hover {
   color: var(--error);
+}
+.li-edit {
+  font-size: 14px;
+}
+.li-edit:hover {
+  color: var(--ink);
+}
+.li-edit:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
 .list-ordered .list-item::before {
   counter-increment: prize;
