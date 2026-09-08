@@ -25,6 +25,7 @@ import {
   type AppState,
   canDeleteParticipant,
   clampSpinMs,
+  DEFAULT_SETTINGS,
   loadState,
   makeParticipant,
   makePrize,
@@ -458,11 +459,16 @@ els.rosterFile.addEventListener("change", () => {
   els.rosterFile.value = "";
 });
 
-// Bounds live in state.ts; the HTML attributes are only a no-JS fallback.
+// state.ts owns the bounds; the input attributes are set from them at boot.
 els.sSpin.min = String(SPIN_MS_MIN / 1000);
 els.sSpin.max = String(SPIN_MS_MAX / 1000);
 els.sSpin.addEventListener("change", () => {
-  state.settings.spinMs = clampSpinMs(Number(els.sSpin.value) * 1000);
+  // A cleared number input reads as "" → 0 (and a junk one as NaN); both would clamp
+  // to SPIN_MS_MIN rather than restore the default, so fall back explicitly. Echo the
+  // clamped value back so the field never disagrees with what was persisted.
+  const seconds = Number(els.sSpin.value);
+  state.settings.spinMs = clampSpinMs(seconds ? seconds * 1000 : DEFAULT_SETTINGS.spinMs);
+  els.sSpin.value = String(state.settings.spinMs / 1000);
   persist();
 });
 els.sSound.addEventListener("change", () => {

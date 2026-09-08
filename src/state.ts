@@ -11,8 +11,8 @@ const KEY = "club-draw:v1";
 
 /**
  * Spin duration bounds (ms) — the single source for the clamp in {@link loadState},
- * the settings-input handler, and the `#s-spin` min/max attributes (set from JS at
- * boot; `index.html` carries the same numbers only as a no-JS fallback).
+ * the settings-input handler, and the `#s-spin` min/max attributes, which `main.ts`
+ * sets at boot. `index.html` carries no bound literals; do not re-add them.
  */
 export const SPIN_MS_MIN = 1000;
 export const SPIN_MS_MAX = 20000;
