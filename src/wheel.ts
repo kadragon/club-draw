@@ -1,4 +1,4 @@
-import { highlightState } from "./draw.js";
+import { highlightState, wedgeAtPointer } from "./draw.js";
 import type { Wheel } from "./types.js";
 
 const TWO_PI = Math.PI * 2;
@@ -421,15 +421,14 @@ export function createWheel(canvas: HTMLCanvasElement): WheelHandle {
     return s.length > n ? `${s.slice(0, n - 1)}…` : s;
   }
 
-  /** Index of the wedge currently under the pointer (φ = −rotation), or −1. */
+  /**
+   * Index of the wedge currently under the pointer, or −1 with no wheel loaded.
+   *
+   * Delegates to `draw.ts`'s `wedgeAtPointer` — the single source of the angle
+   * convention. A local copy here is exactly the drift AGENTS.md warns about.
+   */
   function wedgeIndexAt(rot: number): number {
-    if (!wheel) return -1;
-    const phi = norm(-rot);
-    const ws = wheel.wedges;
-    for (let i = 0; i < ws.length; i++) {
-      if (phi >= ws[i]!.start && phi < ws[i]!.end) return i;
-    }
-    return ws.length - 1; // wrap guard
+    return wheel ? wedgeAtPointer(wheel, rot) : -1;
   }
 
   /** Advance the flap spring one step (dt in ms); kick is an optional impulse. */
