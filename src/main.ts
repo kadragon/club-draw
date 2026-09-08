@@ -21,7 +21,14 @@ import {
   wedgeAtPointer,
 } from "./draw.js";
 import { playFanfare, playTick, unlockAudio } from "./sound.js";
-import { type AppState, loadState, makeParticipant, makePrize, saveState } from "./state.js";
+import {
+  type AppState,
+  canDeleteParticipant,
+  loadState,
+  makeParticipant,
+  makePrize,
+  saveState,
+} from "./state.js";
 import { createWheel, getTailTime } from "./wheel.js";
 
 const TWO_PI = Math.PI * 2;
@@ -90,8 +97,14 @@ function downloadText(filename: string, text: string): void {
   a.href = url;
   a.download = filename;
   a.rel = "noopener";
+  // Firefox needs the anchor in the document for a programmatic click, and it reads
+  // the blob URL asynchronously afterwards — revoking on the next macrotask can still
+  // land before the download task is queued (FileSaver.js settled on a delay for the
+  // same case). Hold the URL for a second; it is one small text blob.
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /**
@@ -210,6 +223,10 @@ function renderParticipants() {
     del.title = "삭제";
     del.onclick = () => {
       if (spinLocked()) return;
+      if (!canDeleteParticipant(state, p.id)) {
+        els.status.textContent = "당첨자는 세션을 초기화한 뒤 삭제할 수 있습니다.";
+        return;
+      }
       state.participants = state.participants.filter((x) => x.id !== p.id);
       persist();
       renderParticipants();
@@ -247,6 +264,13 @@ function renderPrizes() {
     del.title = "삭제";
     del.onclick = () => {
       if (spinLocked()) return;
+      // Symmetric with the participant guard: a drawn prize is the winner's only
+      // back-reference. Deleting it strands them excluded-but-unspinnable and, since
+      // the participant guard then still fires on `excluded`, undeletable too.
+      if (z.drawn) {
+        els.status.textContent = "추첨된 상품은 세션을 초기화한 뒤 삭제할 수 있습니다.";
+        return;
+      }
       state.prizes = state.prizes.filter((x) => x.id !== z.id);
       persist();
       renderPrizes();
@@ -317,7 +341,7 @@ function syncControls() {
   // In setup it stays gated with an explanatory tooltip; stage mode applies the
   // real prize/candidate gate.
   const inStage = document.body.classList.contains("stage-mode");
-  const canSpin = inStage && !!cur && cands.length > 0 && !wheel.isSpinning();
+  const canSpin = inStage && !!cur && cands.length > 0 && !spinLocked();
   els.spinBtn.setAttribute("aria-disabled", canSpin ? "false" : "true");
   els.spinBtn.title = inStage ? "" : "발표 모드에서 추첨을 시작할 수 있습니다";
   if (cur && cands.length === 0) {
@@ -486,7 +510,10 @@ els.zForm.addEventListener("submit", (e) => {
 function applyRoster(text: string) {
   if (spinLocked()) return; // guard the async FileReader path too, not just the call sites
   const rows = parseRoster(text);
-  if (rows.length === 0) return;
+  if (rows.length === 0) {
+    els.status.textContent = "가져올 명단이 없습니다.";
+    return;
+  }
   for (const row of rows) state.participants.push(makeParticipant(row.name, row.cumulativeWins));
   els.rosterText.value = "";
   persist();
@@ -502,6 +529,9 @@ els.rosterFile.addEventListener("change", () => {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => applyRoster(String(reader.result ?? ""));
+  reader.onerror = () => {
+    els.status.textContent = "파일 읽기 실패.";
+  };
   reader.readAsText(file);
   els.rosterFile.value = "";
 });

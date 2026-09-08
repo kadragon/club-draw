@@ -95,6 +95,26 @@ export function saveState(state: AppState): void {
   }
 }
 
+/**
+ * Whether a participant may be removed from the roster.
+ *
+ * A session winner must stay: `state.records` and the CSV export are the audit
+ * trail for a draw that already happened on stage, and `prize.winnerId` points at
+ * this id — deleting them leaves a dangling reference that silently drops the
+ * winner badge from the prize list. Both signals are checked because they can
+ * diverge: `excluded` alone is the live-session flag, while a drawn prize keeps
+ * the reference even if the flag were cleared. Session reset clears both, which is
+ * the supported way to make a winner deletable again.
+ */
+export function canDeleteParticipant(
+  state: { participants: readonly Participant[]; prizes: readonly Prize[] },
+  id: string,
+): boolean {
+  const target = state.participants.find((p) => p.id === id);
+  if (target?.excluded) return false;
+  return !state.prizes.some((z) => z.winnerId === id);
+}
+
 export function makeParticipant(name: string, cumulativeWins = 0): Participant {
   return { id: uid(), name, cumulativeWins, excluded: false };
 }

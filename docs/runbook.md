@@ -16,6 +16,13 @@ bun run cf:dev     # build + wrangler dev (로컬서 _headers/CSP 적용)
 bun run deploy     # build + wrangler deploy
 ```
 
+## 버전
+
+`package.json`의 `version`은 **손대지 말 것**. `.githooks/post-commit`이 커밋 메시지의
+`[TYPE]`을 읽어 자동 bump한다(`[FEAT]`→minor, 그 외 `[TYPE]`→patch, major는 수동, 머지·리베이스
+커밋은 건너뜀). 수동으로 고쳐두면 훅이 "이미 bump됨"으로 보고 건너뛰고, `package.json`에
+커밋 안 된 변경이 남아 있으면 그 커밋의 bump 자체가 조용히 생략된다.
+
 ## 배포 전 체크
 
 1. `bun run lint` 그린(biome).
