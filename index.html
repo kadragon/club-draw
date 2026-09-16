@@ -104,6 +104,38 @@
           <p class="hint">선호 모드에서 후보가 0명인 상품은 미당첨자 전원으로 자동 폴백합니다.</p>
           <p class="hint">칸 수 = max(1, (최대누적+1) − 누적당첨). 누적이 적을수록 칸이 커져 확률이 높아집니다.</p>
         </section>
+
+        <!-- Preference collection: visible in preference mode or while a session exists. -->
+        <section id="session-card" class="card" hidden>
+          <h2 class="card-title">선호 접수</h2>
+          <div id="session-new">
+            <p class="hint">현재 명단·상품으로 접수 세션을 열고, 참가자는 QR로 상품을 최대 3개 고릅니다.</p>
+            <button id="session-open" class="btn btn-primary" type="button">세션 개설</button>
+          </div>
+          <div id="session-live" class="session-live" hidden>
+            <canvas id="session-qr" class="session-qr" aria-label="참가자 선택 화면 QR 코드"></canvas>
+            <div class="field">
+              <span id="session-link-label">참가자 링크</span>
+              <div class="import-actions">
+                <input id="session-link" class="input" type="text" readonly aria-labelledby="session-link-label" />
+                <button id="session-link-copy" class="btn btn-secondary btn-sm" type="button">복사</button>
+              </div>
+            </div>
+            <div class="field">
+              <span id="session-token-label">운영자 토큰 (마감·가져오기에 필요 — 따로 보관)</span>
+              <div class="import-actions">
+                <input id="session-token" class="input" type="text" readonly aria-labelledby="session-token-label" />
+                <button id="session-token-copy" class="btn btn-secondary btn-sm" type="button">복사</button>
+              </div>
+            </div>
+            <p class="hint">개설 후 바꾼 명단·상품은 서버에 반영되지 않습니다.</p>
+            <div class="import-actions">
+              <button id="session-close" class="btn btn-primary" type="button">접수 마감</button>
+              <button id="session-pull" class="btn btn-secondary" type="button">선택 결과 가져오기</button>
+            </div>
+          </div>
+          <p id="session-msg" class="hint" role="status" aria-live="polite"></p>
+        </section>
       </aside>
 
       <!-- CENTER: wheel -->

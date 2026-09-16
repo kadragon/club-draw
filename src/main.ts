@@ -24,6 +24,16 @@ import {
   wedgeAtPointer,
 } from "./draw.js";
 import { createMotionPreference } from "./motion.js";
+import { drawQr } from "./qr.js";
+import {
+  buildSessionPayload,
+  closeSession,
+  countPickers,
+  openSession,
+  pickUrl,
+  pullSnapshot,
+  sessionErrorMessage,
+} from "./session.js";
 import { playFanfare, playTick, unlockAudio } from "./sound.js";
 import {
   type AppState,
@@ -97,6 +107,18 @@ const els = {
   confirmMessage: $("confirm-message"),
   confirmOk: $("confirm-ok") as HTMLButtonElement,
   confirmCancel: $("confirm-cancel") as HTMLButtonElement,
+  sessionCard: $("session-card"),
+  sessionNew: $("session-new"),
+  sessionOpen: $("session-open") as HTMLButtonElement,
+  sessionLive: $("session-live"),
+  sessionQr: $("session-qr") as HTMLCanvasElement,
+  sessionLink: $("session-link") as HTMLInputElement,
+  sessionLinkCopy: $("session-link-copy") as HTMLButtonElement,
+  sessionToken: $("session-token") as HTMLInputElement,
+  sessionTokenCopy: $("session-token-copy") as HTMLButtonElement,
+  sessionClose: $("session-close") as HTMLButtonElement,
+  sessionPull: $("session-pull") as HTMLButtonElement,
+  sessionMsg: $("session-msg"),
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -387,6 +409,74 @@ function renderAll() {
   renderRecords();
   syncControls();
   rebuildWheel();
+  renderSession();
+}
+
+// ── Preference session (network only here; the draw stays offline) ─────────
+/** True while a session request is in flight; blocks double-submits of the same step. */
+let sessionBusy = false;
+/** QR is redrawn only when the session id changes, not on every render. */
+let qrFor: string | null = null;
+
+const fetchApi = (url: string, init?: RequestInit) => fetch(url, init);
+
+/**
+ * Card is shown in preference mode, and also whenever a session handle exists so the
+ * operator token never becomes unreachable just because the mode was toggled.
+ */
+function renderSession() {
+  const s = state.session;
+  els.sessionCard.hidden = state.settings.mode !== "preference" && !s;
+  els.sessionNew.hidden = !!s;
+  els.sessionLive.hidden = !s;
+  els.sessionOpen.disabled = sessionBusy;
+  if (!s) {
+    qrFor = null;
+    return;
+  }
+  const link = pickUrl(location.origin, s.id);
+  els.sessionLink.value = link;
+  els.sessionToken.value = s.adminToken;
+  // A closed session accepts nothing, so the QR would only invite failed submissions.
+  els.sessionQr.hidden = s.closedAt !== null;
+  if (s.closedAt === null && qrFor !== link) {
+    drawQr(els.sessionQr, link);
+    qrFor = link;
+  }
+  els.sessionClose.disabled = sessionBusy || s.closedAt !== null;
+  els.sessionPull.disabled = sessionBusy || s.closedAt === null;
+}
+
+async function runSessionStep(step: () => Promise<void>) {
+  if (sessionBusy) return;
+  sessionBusy = true;
+  renderSession();
+  try {
+    await step();
+  } catch (err) {
+    els.sessionMsg.textContent = sessionErrorMessage(err);
+  } finally {
+    sessionBusy = false;
+    renderSession();
+  }
+}
+
+/** Replace local picks with the closed session's snapshot. Pools change, so it is wheel geometry. */
+async function pullPicks() {
+  const s = state.session;
+  if (!s) return;
+  const snap = await pullSnapshot(fetchApi, s.id, s.adminToken);
+  // The request is awaited: the session may have been reset, or a spin started, meanwhile.
+  if (state.session !== s) return;
+  if (spinLocked()) {
+    els.sessionMsg.textContent = "추첨 중에는 반영할 수 없습니다. 멈춘 뒤 다시 가져오세요.";
+    return;
+  }
+  state.picks = snap.picks;
+  s.closedAt = snap.closedAt;
+  persist();
+  renderAll();
+  els.sessionMsg.textContent = `${countPickers(snap.picks)}명의 선택을 반영했습니다. 이제 네트워크 없이 추첨할 수 있습니다.`;
 }
 
 // ── Draw flow ───────────────────────────────────────────────────────────────
@@ -625,6 +715,60 @@ els.sMode.addEventListener("change", () => {
   renderAll();
 });
 
+els.sessionOpen.addEventListener("click", () => {
+  const built = buildSessionPayload(state.participants, state.prizes);
+  if (!built.ok) {
+    els.sessionMsg.textContent = {
+      "no-participants": "참가자를 먼저 추가하세요.",
+      "no-prizes": "상품을 먼저 추가하세요.",
+      "blank-name": "이름이 빈 참가자·상품이 있습니다.",
+      "name-too-long": "100자를 넘는 이름이 있습니다.",
+    }[built.error];
+    return;
+  }
+  void runSessionStep(async () => {
+    const { sessionId, adminToken } = await openSession(fetchApi, built.payload);
+    // Picks from any earlier round belong to that round's session, not this one.
+    state.session = { id: sessionId, adminToken, closedAt: null };
+    state.picks = {};
+    persist();
+    renderAll();
+    els.sessionMsg.textContent = "세션을 열었습니다. 운영자 토큰을 복사해 보관하세요.";
+  });
+});
+els.sessionClose.addEventListener("click", () => {
+  const s = state.session;
+  if (!s) return;
+  void runSessionStep(async () => {
+    const { closedAt } = await closeSession(fetchApi, s.id, s.adminToken);
+    s.closedAt = closedAt;
+    persist();
+    // Close and pull are one operator intent; a failed pull leaves the retry button.
+    await pullPicks();
+  });
+});
+els.sessionPull.addEventListener("click", () => void runSessionStep(pullPicks));
+
+async function copyField(input: HTMLInputElement, button: HTMLButtonElement) {
+  try {
+    await navigator.clipboard.writeText(input.value);
+    button.textContent = "복사됨 ✓";
+  } catch (err) {
+    console.warn("clipboard write failed:", err);
+    input.select(); // fall back to a manual copy
+    button.textContent = "복사 실패";
+  }
+  window.setTimeout(() => {
+    button.textContent = "복사";
+  }, 1500);
+}
+els.sessionLinkCopy.addEventListener("click", () =>
+  copyField(els.sessionLink, els.sessionLinkCopy),
+);
+els.sessionTokenCopy.addEventListener("click", () =>
+  copyField(els.sessionToken, els.sessionTokenCopy),
+);
+
 // ── Stage (presentation) mode ────────────────────────────────────────────────
 // Same single page; a body class swaps the setup grid for a full-screen wheel.
 // State lives in memory the whole time — switching never reloads or re-inits.
@@ -789,8 +933,7 @@ if (import.meta.env.DEV) {
     getRotation: () => wheel.getRotation(),
     isSpinning: () => wheel.isSpinning(),
     lastResult: () => lastResult,
-    // Manual preference seed until the session API lands: the snapshot normally
-    // arrives from a pull, so dev/browser checks inject it here instead.
+    // Preference seed that bypasses the session API, for browser checks without a Worker.
     setPicks: (picks: PicksMap) => {
       state.picks = picks;
       persist();
