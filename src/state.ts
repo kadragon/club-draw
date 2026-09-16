@@ -81,14 +81,14 @@ function readMode(v: unknown): DrawMode {
 }
 
 /**
- * Sanitize a persisted picks payload into a {@link PicksMap}.
+ * Sanitize a persisted or freshly pulled picks payload into a {@link PicksMap}.
  *
  * The map is a pulled snapshot, not operator-typed, so it is normalized rather than
  * trusted: a non-object payload yields `{}`, a non-array entry is dropped entirely,
  * and within an entry only strings survive, deduplicated. A malformed entry must not
  * be able to widen or narrow a prize's candidate pool by accident.
  */
-function readPicks(v: unknown): PicksMap {
+export function readPicks(v: unknown): PicksMap {
   if (!isObj(v) || Array.isArray(v)) return {};
   const out: Record<string, string[]> = {};
   for (const [prizeId, ids] of Object.entries(v)) {

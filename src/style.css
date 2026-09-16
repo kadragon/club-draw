@@ -422,6 +422,27 @@ body {
   gap: 8px;
 }
 
+/* ── Preference session card ───────────────────────────────────────────── */
+.session-live {
+  margin-top: 4px;
+}
+.session-live .input {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+}
+/* White quiet zone is drawn into the canvas; keep it square and centered. */
+.session-qr {
+  display: block;
+  margin: 4px auto 12px;
+  border-radius: 8px;
+  image-rendering: pixelated;
+}
+/* `display: block` above outranks the UA `[hidden]` rule. */
+.session-qr[hidden] {
+  display: none;
+}
+
 /* ── Center / wheel ────────────────────────────────────────────────────── */
 .now-drawing {
   text-align: center;

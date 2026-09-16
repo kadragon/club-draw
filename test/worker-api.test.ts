@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getPlatformProxy } from "wrangler";
 import initSql from "../migrations/0001_init.sql?raw";
+import {
+  closeSession as clientClose,
+  openSession as clientOpen,
+  pullSnapshot as clientPull,
+} from "../src/session";
 import worker, { type Env } from "../worker/index";
 
 /**
@@ -187,6 +192,28 @@ describe("operator endpoints", () => {
       picks: { a: ["p1", "p2", "p3"], b: ["p1"], c: ["p2"], d: [] },
     });
     expect((await call("GET", `/api/session/${sessionId}`)).status).toBe(200);
+  });
+});
+
+describe("operator client round-trip", () => {
+  it("opens, closes and pulls through src/session.ts against the real Worker", async () => {
+    const fetchApi = (url: string, init?: RequestInit) =>
+      worker.fetch(new Request(`http://local${url}`, init), env);
+    const { sessionId, adminToken } = await clientOpen(fetchApi, roster);
+    await pick(sessionId, { participantId: "p2", prizeIds: ["b", "d"] });
+
+    await expect(clientPull(fetchApi, sessionId, adminToken)).rejects.toMatchObject({
+      status: 409,
+      code: "session-open",
+    });
+    await expect(clientClose(fetchApi, sessionId, "wrong")).rejects.toMatchObject({
+      code: "unauthorized",
+    });
+    const { closedAt } = await clientClose(fetchApi, sessionId, adminToken);
+    expect(await clientPull(fetchApi, sessionId, adminToken)).toEqual({
+      closedAt,
+      picks: { a: [], b: ["p2"], c: [], d: ["p2"] },
+    });
   });
 });
 
