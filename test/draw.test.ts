@@ -320,11 +320,11 @@ describe("candidatesFor", () => {
     expect(r.fellBack).toBe(false);
   });
 
-  it("reports an empty candidate list when the whole roster has won", () => {
+  it("does not claim a fallback when there is nobody left to fall back to", () => {
     const all = [p("a", 0, true)];
     const r = candidatesFor(all, "preference", { z1: ["a"] }, "z1");
     expect(r.candidates).toEqual([]);
-    expect(r.fellBack).toBe(true);
+    expect(r.fellBack).toBe(false);
   });
 });
 

@@ -19,12 +19,14 @@ export type NormalizedPicks =
  * only then is {@link MAX_PICKS} enforced. An id absent from `knownPrizeIds`
  * (including a non-string that slipped through an untyped payload) is rejected
  * rather than dropped, because silently discarding it would confirm a submission
- * the participant did not make.
+ * the participant did not make. A payload that is not an array at all is rejected
+ * the same way rather than thrown on, so a malformed request stays a 400.
  */
 export function normalizePicks(
   knownPrizeIds: readonly string[],
   selected: readonly string[],
 ): NormalizedPicks {
+  if (!Array.isArray(selected)) return { ok: false, error: "unknown-prize" };
   const known = new Set(knownPrizeIds);
   const prizeIds: string[] = [];
   for (const id of selected) {

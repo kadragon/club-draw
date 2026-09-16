@@ -80,6 +80,9 @@ export interface CandidatePool {
  * an earlier prize. Falling back rather than skipping keeps the prize from going
  * unclaimed; the caller shows a badge on `fellBack`.
  *
+ * `fellBack` reports that the pool was genuinely widened past the pickers, so it stays
+ * false when nothing remained to widen to — an empty wheel is not a fallback.
+ *
  * Roster order is preserved (not pick order) so the wheel layout stays stable across
  * prizes. Ids in `picks` that are not on the roster are ignored — a snapshot can
  * outlive a roster edit.
@@ -95,7 +98,7 @@ export function candidatesFor(
   const pickers = new Set(picks[prizeId] ?? []);
   const preferred = remaining.filter((p) => pickers.has(p.id));
   if (preferred.length > 0) return { candidates: preferred, fellBack: false };
-  return { candidates: remaining, fellBack: true };
+  return { candidates: remaining, fellBack: remaining.length > 0 };
 }
 
 /**

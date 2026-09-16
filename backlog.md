@@ -26,3 +26,9 @@
 ## 선호 모드 — 문서 동기화
 
 - [ ] [DOCS] `AGENTS.md`(모드 불변식·Docs Index), `docs/architecture.md`(Worker/D1·`pick.html` 의존 방향), `docs/runbook.md`(D1 마이그레이션·세션 운영·배포 체크)를 선호 모드 기준으로 갱신. 근거: `docs/design/preference-draw-mode.md`. 검증: `bun run lint` green, AGENTS.md 100줄 목표 유지. *(blocked by: 4-operator-session-ui)* *(blocked by: 5-participant-pick-page)*
+
+## Review Backlog
+
+### PR #43 — preference draw mode: pure candidate/pick logic and state schema (2026-09-16)
+
+- [ ] [debt] `applyRestore`가 참가자·상품 id를 새로 발급하면서 `state.picks`·`state.session`을 그대로 남겨, 복원 후 선호 모드가 전 상품 폴백으로 조용히 돌아감. 세션 리셋도 `session`을 비우지 않음. 복원·리셋 시 `picks: {}`·`session: null`로 비울 것 (source: code-review) — src/main.ts:685, src/main.ts:644 *(blocked by: preference-mode-toggle)*

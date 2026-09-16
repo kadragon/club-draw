@@ -38,6 +38,13 @@ describe("normalizePicks", () => {
     });
   });
 
+  it("rejects a non-array payload instead of throwing", () => {
+    expect(normalizePicks(KNOWN, null as unknown as string[])).toEqual({
+      ok: false,
+      error: "unknown-prize",
+    });
+  });
+
   it("rejects non-string entries rather than coercing them", () => {
     expect(normalizePicks(KNOWN, ["z1", 7 as unknown as string])).toEqual({
       ok: false,
