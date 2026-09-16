@@ -58,7 +58,7 @@ export class SessionApiError extends Error {
   }
 }
 
-async function request<T>(fetchFn: FetchLike, url: string, init: RequestInit): Promise<T> {
+export async function request<T>(fetchFn: FetchLike, url: string, init: RequestInit): Promise<T> {
   let res: Response;
   try {
     res = await fetchFn(url, init);
@@ -75,7 +75,8 @@ async function request<T>(fetchFn: FetchLike, url: string, init: RequestInit): P
   return body;
 }
 
-const path = (id: string, tail = "") => `/api/session/${encodeURIComponent(id)}${tail}`;
+export const sessionPath = (id: string, tail = "") =>
+  `/api/session/${encodeURIComponent(id)}${tail}`;
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 export async function openSession(
@@ -102,7 +103,7 @@ export async function closeSession(
   id: string,
   token: string,
 ): Promise<{ closedAt: string }> {
-  const body = await request<{ closedAt?: unknown }>(fetchFn, path(id, "/close"), {
+  const body = await request<{ closedAt?: unknown }>(fetchFn, sessionPath(id, "/close"), {
     method: "POST",
     headers: auth(token),
   });
@@ -117,7 +118,7 @@ export async function pullSnapshot(
 ): Promise<{ closedAt: string; picks: PicksMap }> {
   const body = await request<{ closedAt?: unknown; picks?: unknown }>(
     fetchFn,
-    path(id, "/snapshot"),
+    sessionPath(id, "/snapshot"),
     { method: "GET", headers: auth(token) },
   );
   if (typeof body.closedAt !== "string") throw new SessionApiError(200, "bad-response");

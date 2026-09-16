@@ -2,6 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getPlatformProxy } from "wrangler";
 import initSql from "../migrations/0001_init.sql?raw";
 import {
+  fetchPickSession as clientFetchPick,
+  submitPicks as clientSubmit,
+} from "../src/pick-client";
+import {
   closeSession as clientClose,
   openSession as clientOpen,
   pullSnapshot as clientPull,
@@ -214,6 +218,33 @@ describe("operator client round-trip", () => {
       closedAt,
       picks: { a: [], b: ["p2"], c: [], d: ["p2"] },
     });
+  });
+});
+
+describe("participant client round-trip", () => {
+  it("loads, submits, edits with the claim token, and is refused after close", async () => {
+    const fetchApi = (url: string, init?: RequestInit) =>
+      worker.fetch(new Request(`http://local${url}`, init), env);
+    const { sessionId, adminToken } = await openSession();
+
+    expect(await clientFetchPick(fetchApi, sessionId)).toEqual({ closed: false, ...roster });
+    const { claimToken } = await clientSubmit(fetchApi, sessionId, {
+      participantId: "p1",
+      prizeIds: ["a", "b"],
+    });
+    await expect(
+      clientSubmit(fetchApi, sessionId, { participantId: "p1", prizeIds: ["c"] }),
+    ).rejects.toMatchObject({ code: "already-submitted" });
+    expect(
+      await clientSubmit(fetchApi, sessionId, { participantId: "p1", prizeIds: ["c"], claimToken }),
+    ).toEqual({ claimToken });
+
+    await call("POST", `/api/session/${sessionId}/close`, undefined, adminToken);
+    expect((await clientFetchPick(fetchApi, sessionId)).closed).toBe(true);
+    await expect(
+      clientSubmit(fetchApi, sessionId, { participantId: "p1", prizeIds: ["d"], claimToken }),
+    ).rejects.toMatchObject({ status: 409, code: "session-closed" });
+    await expect(clientFetchPick(fetchApi, "nope")).rejects.toMatchObject({ code: "not-found" });
   });
 });
 
