@@ -141,13 +141,19 @@ export interface WinnerResult {
   winner: Participant;
 }
 
-/** Convenience: build wheel from live candidates and pick a weighted winner. */
+/**
+ * Build the wheel from an already-formed candidate pool and pick a weighted winner.
+ *
+ * Takes the pool rather than the roster because the pool is prize-scoped under
+ * preference mode: the caller runs {@link candidatesFor} once and feeds the SAME
+ * array to the displayed wheel and to this selection, so the rendered wedges and
+ * the drawn winner can never come from two different pools.
+ */
 export function selectWinner(
-  participants: readonly Participant[],
+  candidates: readonly Participant[],
   baseSlots: number,
   rng: RandomSource = defaultRng,
 ): WinnerResult | null {
-  const candidates = candidatesFrom(participants);
   if (candidates.length === 0) return null;
   const wheel = buildWheel(candidates, baseSlots);
   const index = selectIndex(wheel, rng);

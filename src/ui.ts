@@ -132,9 +132,20 @@ export function renderParticipantList(
   focusTarget?.select();
 }
 
+/** Per-prize candidate summary shown in preference mode. See {@link renderPrizeList}. */
+export interface PrizePoolInfo {
+  count: number;
+  fellBack: boolean;
+}
+
 /**
  * Prize list in draw order. `currentPrize` is the next undrawn prize (marked
  * `is-current`); a drawn prize shows its winner's name resolved from `participants`.
+ *
+ * `poolInfo` is optional and only consulted for undrawn prizes: it returns that
+ * prize's candidate count, or null to show nothing (all-participants mode). The
+ * count is a snapshot against the CURRENT winners, so a later prize's number can
+ * still shrink as earlier prizes are drawn — it is a planning aid, not a promise.
  */
 export function renderPrizeList(
   el: HTMLElement,
@@ -142,6 +153,7 @@ export function renderPrizeList(
   participants: readonly Participant[],
   currentPrize: Prize | null,
   onDelete: (prize: Prize) => void,
+  poolInfo?: (prize: Prize) => PrizePoolInfo | null,
 ): void {
   el.replaceChildren();
   for (const z of prizes) {
@@ -151,6 +163,14 @@ export function renderPrizeList(
     if (z.drawn && z.winnerId) {
       const w = participants.find((p) => p.id === z.winnerId);
       if (w) li.appendChild(badge(w.name));
+    }
+    if (!z.drawn) {
+      const info = poolInfo?.(z) ?? null;
+      if (info) {
+        const b = badge(info.fellBack ? `후보 ${info.count} · 폴백` : `후보 ${info.count}`);
+        if (info.fellBack) b.classList.add("is-fallback");
+        li.appendChild(b);
+      }
     }
     li.appendChild(deleteButton(() => onDelete(z)));
     el.appendChild(li);

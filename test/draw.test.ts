@@ -236,21 +236,49 @@ describe("fairness invariant (draw.ts internal round-trip)", () => {
 });
 
 describe("selectWinner integration", () => {
-  it("returns null when no candidates remain", () => {
-    expect(selectWinner([p("a", 0, true)], 5)).toBeNull();
+  it("returns null on an empty pool", () => {
+    expect(selectWinner([], 5)).toBeNull();
   });
 
-  it("excludes session winners then picks the weighted winner", () => {
-    // candidates after exclusion: a(base5,slots5), c(base5,slots5) -> total 10
+  it("picks the weighted winner from the pool it was handed", () => {
+    // pool: a(base5,slots5), c(base5,slots5) -> total 10
     // stub r=7 -> idx0 range [0,5), idx1 range [5,10) -> index 1 => "c"
-    const list = [p("a"), p("b", 0, true), p("c")];
-    const result = selectWinner(list, 5, stubRng(7).rng);
+    const pool = candidatesFor([p("a"), p("b", 0, true), p("c")], "all", {}, "z1").candidates;
+    const result = selectWinner(pool, 5, stubRng(7).rng);
     expect(result).not.toBeNull();
     expect(result!.winner.name).toBe("c");
     expect(result!.index).toBe(1);
     expect(
       wedgeAtPointer(result!.wheel, computeTargetRotation(result!.wheel, result!.index, 6)),
     ).toBe(result!.index);
+  });
+
+  it("draws only from the prize's pickers in preference mode", () => {
+    // Same roster, same rng: the mode alone decides who can win.
+    const roster = [p("a"), p("b"), p("c")];
+    const picks = { z1: ["c"] };
+    const base = effectiveBaseSlots(roster);
+    const all = selectWinner(
+      candidatesFor(roster, "all", picks, "z1").candidates,
+      base,
+      stubRng(0).rng,
+    );
+    const pref = selectWinner(
+      candidatesFor(roster, "preference", picks, "z1").candidates,
+      base,
+      stubRng(0).rng,
+    );
+    expect(all!.winner.id).toBe("a");
+    expect(pref!.winner.id).toBe("c");
+    expect(pref!.wheel.wedges).toHaveLength(1);
+  });
+
+  it("draws from every remaining participant when the preference pool fell back", () => {
+    const roster = [p("a"), p("b"), p("c")];
+    const pool = candidatesFor(roster, "preference", { z1: [] }, "z1");
+    expect(pool.fellBack).toBe(true);
+    const result = selectWinner(pool.candidates, effectiveBaseSlots(roster), stubRng(0).rng);
+    expect(result!.wheel.wedges).toHaveLength(3);
   });
 });
 

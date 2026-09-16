@@ -441,6 +441,25 @@ body {
   color: var(--muted);
   margin: 0;
 }
+/* Preference-mode chip under the prize title. `.is-fallback` is the "nobody picked
+   this one" state the operator has to be able to read from the stage. */
+.mode-badge {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--mint);
+  border-radius: var(--radius-pill);
+  padding: 3px 12px;
+  margin: 6px 0 0;
+}
+.mode-badge.is-fallback {
+  background: var(--peach);
+}
+.li-badge.is-fallback {
+  background: var(--peach);
+}
+
 .wheel-wrap {
   position: relative;
   /* Bounded on both axes so it always fits the center column. */
@@ -949,6 +968,10 @@ body.stage-mode .now-title {
 }
 body.stage-mode .progress-text {
   font-size: clamp(15px, 1.8vw, 24px);
+}
+body.stage-mode .mode-badge {
+  font-size: clamp(14px, 1.6vw, 22px);
+  padding: 4px 16px;
 }
 /* Height-bound so the big title, wheel, and controls all fit one screen. */
 body.stage-mode .wheel-wrap {
