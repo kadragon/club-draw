@@ -27,12 +27,14 @@ import { createMotionPreference } from "./motion.js";
 import { playFanfare, playTick, unlockAudio } from "./sound.js";
 import {
   type AppState,
+  applyBackupData,
   canDeleteParticipant,
   clampSpinMs,
   DEFAULT_SETTINGS,
   loadState,
   makeParticipant,
   makePrize,
+  resetSessionState,
   SPIN_MS_MAX,
   SPIN_MS_MIN,
   saveState,
@@ -712,12 +714,7 @@ els.resultCopy.addEventListener("click", async () => {
 els.resetSession.addEventListener("click", async () => {
   if (spinLocked()) return;
   if (!(await confirmModal("세션 당첨/기록을 초기화할까요? (참가자·상품·누적값은 유지)"))) return;
-  for (const p of state.participants) p.excluded = false;
-  for (const z of state.prizes) {
-    z.drawn = false;
-    z.winnerId = undefined;
-  }
-  state.records = [];
+  resetSessionState(state);
   els.overlay.hidden = true;
   wheel.setHighlight(null); // drop any lingering reveal spotlight before rebuilding
   closeResult(); // result modal may hold now-stale roster/records
@@ -750,9 +747,7 @@ async function applyRestore(token: string) {
   }
   if (!(await confirmModal("현재 데이터를 백업 내용으로 교체할까요? (세션 기록은 초기화됩니다)")))
     return;
-  state.participants = data.participants.map((p) => makeParticipant(p.name, p.cumulativeWins));
-  state.prizes = data.prizes.map((z) => makePrize(z.name));
-  state.records = [];
+  applyBackupData(state, data);
   els.overlay.hidden = true;
   wheel.setHighlight(null);
   closeResult();
