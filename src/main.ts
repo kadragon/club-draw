@@ -13,6 +13,8 @@ import {
 } from "./csv.js";
 import {
   buildWheel,
+  type CandidatePool,
+  candidatesFor,
   candidatesFrom,
   computeTargetRotation,
   effectiveBaseSlots,
@@ -36,6 +38,7 @@ import {
   saveState,
   setParticipantWins,
 } from "./state.js";
+import type { DrawMode, PicksMap, Prize } from "./types.js";
 import { renderParticipantList, renderPrizeList, renderRecordList } from "./ui.js";
 import { createWheel, getTailTime } from "./wheel.js";
 
@@ -60,8 +63,10 @@ const els = {
   zList: $("prize-list"),
   sSpin: $("s-spin") as HTMLInputElement,
   sSound: $("s-sound") as HTMLInputElement,
+  sMode: $("s-mode") as HTMLSelectElement,
   currentPrize: $("current-prize"),
   progress: $("progress"),
+  modeBadge: $("mode-badge"),
   spinBtn: $("spin-btn") as HTMLButtonElement,
   status: $("status"),
   recordList: $("record-list"),
@@ -157,15 +162,25 @@ function currentPrize() {
   return state.prizes.find((p) => !p.drawn) ?? null;
 }
 
-function liveCandidates() {
-  return candidatesFrom(state.participants);
+/**
+ * Candidate pool for one prize under the active mode — the single source every
+ * call site shares.
+ *
+ * The displayed wheel, the START gate, the candidate counts and `spin()` all read
+ * it, so the wedges on screen and the pool the winner is drawn from can never
+ * diverge. With no pending prize there is nothing to intersect against, so the
+ * all-remaining pool stands in (used only for gating, never for a draw).
+ */
+function poolFor(prize: Prize | null): CandidatePool {
+  if (!prize) return { candidates: candidatesFrom(state.participants), fellBack: false };
+  return candidatesFor(state.participants, state.settings.mode, state.picks, prize.id);
 }
 
 /** Base slots derived from the live roster — keeps rebuild and spin call sites symmetric. */
 const currentBaseSlots = (): number => effectiveBaseSlots(state.participants);
 
 function rebuildWheel() {
-  const cands = liveCandidates();
+  const cands = poolFor(currentPrize()).candidates;
   wheel.setWheel(cands.length ? buildWheel(cands, currentBaseSlots()) : null);
   refreshIdle();
 }
@@ -204,7 +219,7 @@ function refreshIdle() {
     els.overlay.hidden &&
     !spinLocked() &&
     currentPrize() !== null &&
-    liveCandidates().length > 0 &&
+    poolFor(currentPrize()).candidates.length > 0 &&
     !motion.reduced();
   wheel.setIdle(allowed);
 }
@@ -232,9 +247,7 @@ function renderParticipants() {
       state.participants = state.participants.filter((x) => x.id !== p.id);
       editingWinsId = null;
       persist();
-      renderParticipants();
-      rebuildWheel();
-      syncControls();
+      renderRoster();
     },
     {
       editingId: editingWinsId,
@@ -258,30 +271,44 @@ function renderParticipants() {
         }
         state.participants = updated;
         persist();
-        renderParticipants();
-        rebuildWheel();
-        syncControls();
+        renderRoster();
       },
     },
   );
 }
 
 function renderPrizes() {
-  renderPrizeList(els.zList, state.prizes, state.participants, currentPrize(), (z) => {
-    if (spinLocked()) return;
-    // Symmetric with the participant guard: a drawn prize is the winner's only
-    // back-reference. Deleting it strands them excluded-but-unspinnable and, since
-    // the participant guard then still fires on `excluded`, undeletable too.
-    if (z.drawn) {
-      els.status.textContent = "추첨된 상품은 세션을 초기화한 뒤 삭제할 수 있습니다.";
-      return;
-    }
-    state.prizes = state.prizes.filter((x) => x.id !== z.id);
-    persist();
-    renderPrizes();
-    syncControls();
-    refreshIdle(); // removing the last pending prize must stop idle drift
-  });
+  const showPools = state.settings.mode === "preference";
+  renderPrizeList(
+    els.zList,
+    state.prizes,
+    state.participants,
+    currentPrize(),
+    (z) => {
+      if (spinLocked()) return;
+      // Symmetric with the participant guard: a drawn prize is the winner's only
+      // back-reference. Deleting it strands them excluded-but-unspinnable and, since
+      // the participant guard then still fires on `excluded`, undeletable too.
+      if (z.drawn) {
+        els.status.textContent = "추첨된 상품은 세션을 초기화한 뒤 삭제할 수 있습니다.";
+        return;
+      }
+      state.prizes = state.prizes.filter((x) => x.id !== z.id);
+      persist();
+      renderPrizes();
+      syncControls();
+      // The pool is prize-scoped, so changing WHICH prize is current is wheel
+      // geometry: without the rebuild the canvas would keep the deleted prize's
+      // pool while spin() draws from the next one. rebuildWheel also refreshes
+      // idle, which removing the last pending prize must do.
+      rebuildWheel();
+    },
+    (z) => {
+      if (!showPools) return null;
+      const pool = poolFor(z);
+      return { count: pool.candidates.length, fellBack: pool.fellBack };
+    },
+  );
 }
 
 function renderRecords() {
@@ -291,10 +318,28 @@ function renderRecords() {
 function syncControls() {
   els.sSpin.value = String(state.settings.spinMs / 1000);
   els.sSound.checked = state.settings.sound;
+  els.sMode.value = state.settings.mode;
 
   const cur = currentPrize();
-  const cands = liveCandidates();
+  const pool = poolFor(cur);
+  const cands = pool.candidates;
   const drawnCount = state.prizes.filter((p) => p.drawn).length;
+
+  // Preference badge is stage-visible on purpose: the operator has to be able to say
+  // out loud why a non-picker is on the wheel the moment the pool falls back. With no
+  // pending prize there is no pool to describe (`poolFor(null)` never falls back), so
+  // the badge would otherwise claim a filter that is not being applied to anything.
+  if (state.settings.mode !== "preference" || !cur) {
+    els.modeBadge.hidden = true;
+    els.modeBadge.textContent = "";
+    els.modeBadge.classList.remove("is-fallback");
+  } else {
+    els.modeBadge.hidden = false;
+    els.modeBadge.classList.toggle("is-fallback", pool.fellBack);
+    els.modeBadge.textContent = pool.fellBack
+      ? "선호 모드 · 고른 사람이 없어 미당첨자 전원으로 추첨"
+      : "선호 모드 · 이 상품을 고른 사람만";
+  }
 
   if (state.prizes.length === 0) {
     els.currentPrize.textContent = "상품을 추가하세요";
@@ -322,6 +367,18 @@ function syncControls() {
   }
 }
 
+/**
+ * Re-render everything a roster change touches. The prize list carries per-prize
+ * candidate counts under preference mode, so adding, removing or re-weighting a
+ * participant changes it too — rendering only the roster leaves those badges stale.
+ */
+function renderRoster() {
+  renderParticipants();
+  renderPrizes();
+  rebuildWheel();
+  syncControls();
+}
+
 function renderAll() {
   renderParticipants();
   renderPrizes();
@@ -339,7 +396,9 @@ function spin() {
   const prize = currentPrize();
   if (!prize || wheel.isSpinning()) return;
 
-  const result = selectWinner(state.participants, currentBaseSlots());
+  // Same pool object shape the wheel was rebuilt from, so the wedges on screen and
+  // the wedge the winner is drawn from are one layout.
+  const result = selectWinner(poolFor(prize).candidates, currentBaseSlots());
   if (!result) {
     syncControls();
     return;
@@ -461,9 +520,7 @@ els.pForm.addEventListener("submit", (e) => {
   els.pWins.value = "0";
   els.pName.focus();
   persist();
-  renderParticipants();
-  rebuildWheel();
-  syncControls();
+  renderRoster();
 });
 
 els.zForm.addEventListener("submit", (e) => {
@@ -477,7 +534,9 @@ els.zForm.addEventListener("submit", (e) => {
   persist();
   renderPrizes();
   syncControls();
-  refreshIdle(); // a first/again-available prize may now permit idle drift
+  // Same reason as the delete path: a first/again-available prize changes the pool
+  // the wheel must show (and may permit idle drift again).
+  rebuildWheel();
 });
 
 /**
@@ -511,9 +570,7 @@ async function applyRoster(text: string) {
   for (const row of fresh) state.participants.push(makeParticipant(row.name, row.cumulativeWins));
   els.rosterText.value = "";
   persist();
-  renderParticipants();
-  rebuildWheel();
-  syncControls();
+  renderRoster();
   els.status.textContent =
     duplicates.length > 0
       ? `${fresh.length}명 추가됨 · 중복 ${duplicates.length}명 제외`
@@ -553,6 +610,17 @@ els.sSound.addEventListener("change", () => {
   state.settings.sound = els.sSound.checked;
   if (state.settings.sound) unlockAudio();
   persist();
+});
+// Mode changes the candidate pool, so it is wheel geometry — gated like a delete
+// and followed by a full re-render (wheel, counts, badge, START gate).
+els.sMode.addEventListener("change", () => {
+  if (spinLocked()) {
+    els.sMode.value = state.settings.mode;
+    return;
+  }
+  state.settings.mode = els.sMode.value === "preference" ? "preference" : "all";
+  persist();
+  renderAll();
 });
 
 // ── Stage (presentation) mode ────────────────────────────────────────────────
@@ -721,6 +789,18 @@ if (import.meta.env.DEV) {
     getRotation: () => wheel.getRotation(),
     isSpinning: () => wheel.isSpinning(),
     lastResult: () => lastResult,
+    // Manual preference seed until the session API lands: the snapshot normally
+    // arrives from a pull, so dev/browser checks inject it here instead.
+    setPicks: (picks: PicksMap) => {
+      state.picks = picks;
+      persist();
+      renderAll();
+    },
+    setMode: (mode: DrawMode) => {
+      state.settings.mode = mode;
+      persist();
+      renderAll();
+    },
   };
 }
 
