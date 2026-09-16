@@ -1086,3 +1086,88 @@ body.stage-mode .center-actions .btn {
   pointer-events: none;
   z-index: 9999;
 }
+
+/* ── Participant pick page (pick.html) ─────────────────────────────────── */
+/* The operator layout locks the viewport; the phone page scrolls normally. */
+body.pick-page {
+  height: auto;
+  min-height: 100dvh;
+  overflow: auto;
+}
+.pick-main {
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 8px 16px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.pick-status {
+  font-size: 15px;
+  color: var(--body);
+  margin: 0;
+}
+.pick-results,
+.pick-prizes {
+  margin-top: 12px;
+}
+.pick-result {
+  width: 100%;
+  font-family: var(--font);
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--canvas);
+  text-align: left;
+  cursor: pointer;
+  justify-content: space-between;
+}
+.pick-result:hover,
+.pick-result:focus-visible {
+  border-color: var(--ink);
+  outline: none;
+}
+.pick-tag {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.pick-who {
+  margin: 0 0 4px;
+  font-size: 15px;
+  color: var(--body);
+}
+.pick-name {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--ink);
+}
+.pick-prize {
+  cursor: pointer;
+  font-size: 16px;
+  min-height: 44px;
+}
+.pick-prize input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--ink);
+  flex: 0 0 auto;
+}
+.pick-prize:has(input:checked) {
+  border-color: var(--ink);
+  background: var(--surface-strong);
+}
+.pick-prize:has(input:disabled:not(:checked)) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pick-submit {
+  width: 100%;
+  margin-top: 16px;
+  font-size: 16px;
+  padding: 14px 18px;
+}
+/* `display` rules above outrank the UA `[hidden]` rule. */
+.pick-page .btn[hidden] {
+  display: none;
+}
