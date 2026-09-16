@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   buildWheel,
+  candidatesFor,
   candidatesFrom,
   computeTargetRotation,
   effectiveBaseSlots,
@@ -271,5 +272,67 @@ describe("highlightState", () => {
   });
   it("non-matching id while highlight active → dim, not winner", () => {
     expect(highlightState("a", "b")).toEqual({ isWinner: false, dim: true });
+  });
+});
+
+describe("candidatesFor", () => {
+  const roster = [p("a"), p("b"), p("c"), p("d", 0, true)];
+  const picks = { z1: ["a", "d"], z2: ["d"], z3: [] };
+
+  it("all mode ignores picks and returns every non-excluded participant", () => {
+    const r = candidatesFor(roster, "all", picks, "z1");
+    expect(r.candidates.map((x) => x.id)).toEqual(["a", "b", "c"]);
+    expect(r.fellBack).toBe(false);
+  });
+
+  it("preference mode keeps only pickers who have not won yet", () => {
+    const r = candidatesFor(roster, "preference", picks, "z1");
+    expect(r.candidates.map((x) => x.id)).toEqual(["a"]);
+    expect(r.fellBack).toBe(false);
+  });
+
+  it("falls back to every remaining participant when all pickers already won", () => {
+    const r = candidatesFor(roster, "preference", picks, "z2");
+    expect(r.candidates.map((x) => x.id)).toEqual(["a", "b", "c"]);
+    expect(r.fellBack).toBe(true);
+  });
+
+  it("falls back when nobody picked the prize at all", () => {
+    const r = candidatesFor(roster, "preference", picks, "z3");
+    expect(r.candidates.map((x) => x.id)).toEqual(["a", "b", "c"]);
+    expect(r.fellBack).toBe(true);
+  });
+
+  it("falls back for a prize missing from the picks map", () => {
+    const r = candidatesFor(roster, "preference", picks, "unknown");
+    expect(r.candidates.map((x) => x.id)).toEqual(["a", "b", "c"]);
+    expect(r.fellBack).toBe(true);
+  });
+
+  it("returns candidates in roster order, not pick order", () => {
+    const r = candidatesFor(roster, "preference", { z1: ["c", "a"] }, "z1");
+    expect(r.candidates.map((x) => x.id)).toEqual(["a", "c"]);
+  });
+
+  it("ignores a picked id that is not on the roster", () => {
+    const r = candidatesFor(roster, "preference", { z1: ["a", "ghost"] }, "z1");
+    expect(r.candidates.map((x) => x.id)).toEqual(["a"]);
+    expect(r.fellBack).toBe(false);
+  });
+
+  it("does not claim a fallback when there is nobody left to fall back to", () => {
+    const all = [p("a", 0, true)];
+    const r = candidatesFor(all, "preference", { z1: ["a"] }, "z1");
+    expect(r.candidates).toEqual([]);
+    expect(r.fellBack).toBe(false);
+  });
+});
+
+describe("effectiveBaseSlots stays roster-wide under preference mode", () => {
+  it("is unchanged by narrowing the candidate pool to one picker", () => {
+    const roster = [p("a"), p("b", 4)];
+    const { candidates } = candidatesFor(roster, "preference", { z1: ["a"] }, "z1");
+    expect(candidates.map((x) => x.id)).toEqual(["a"]);
+    expect(effectiveBaseSlots(roster)).toBe(5);
   });
 });

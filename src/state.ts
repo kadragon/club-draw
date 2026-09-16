@@ -1,10 +1,22 @@
-import type { DrawRecord, Participant, Prize, Settings } from "./types.js";
+import type {
+  DrawMode,
+  DrawRecord,
+  Participant,
+  PicksMap,
+  Prize,
+  SessionRef,
+  Settings,
+} from "./types.js";
 
 export interface AppState {
   participants: Participant[];
   prizes: Prize[];
   settings: Settings;
   records: DrawRecord[];
+  /** Preference snapshot pulled from the session; empty in `"all"` mode. */
+  picks: PicksMap;
+  /** Open/closed preference session, or null when none was opened. */
+  session: SessionRef | null;
 }
 
 const KEY = "club-draw:v1";
@@ -17,7 +29,7 @@ const KEY = "club-draw:v1";
 export const SPIN_MS_MIN = 1000;
 export const SPIN_MS_MAX = 20000;
 
-export const DEFAULT_SETTINGS: Settings = { spinMs: 5000, sound: true };
+export const DEFAULT_SETTINGS: Settings = { spinMs: 5000, sound: true, mode: "all" };
 
 /** Clamp an arbitrary spin duration (ms) into the supported range. NaN → default. */
 export function clampSpinMs(ms: number): number {
@@ -53,7 +65,49 @@ export function setParticipantWins(
 }
 
 export function defaultState(): AppState {
-  return { participants: [], prizes: [], settings: { ...DEFAULT_SETTINGS }, records: [] };
+  return {
+    participants: [],
+    prizes: [],
+    settings: { ...DEFAULT_SETTINGS },
+    records: [],
+    picks: {},
+    session: null,
+  };
+}
+
+/** Coerce a persisted mode string; anything unrecognized degrades to the original behaviour. */
+function readMode(v: unknown): DrawMode {
+  return v === "preference" ? "preference" : "all";
+}
+
+/**
+ * Sanitize a persisted picks payload into a {@link PicksMap}.
+ *
+ * The map is a pulled snapshot, not operator-typed, so it is normalized rather than
+ * trusted: a non-object payload yields `{}`, a non-array entry is dropped entirely,
+ * and within an entry only strings survive, deduplicated. A malformed entry must not
+ * be able to widen or narrow a prize's candidate pool by accident.
+ */
+function readPicks(v: unknown): PicksMap {
+  if (!isObj(v) || Array.isArray(v)) return {};
+  const out: Record<string, string[]> = {};
+  for (const [prizeId, ids] of Object.entries(v)) {
+    if (!Array.isArray(ids)) continue;
+    out[prizeId] = [...new Set(ids.filter((id): id is string => typeof id === "string"))];
+  }
+  return out;
+}
+
+/** Read a persisted session handle; an entry without an id is unusable and becomes null. */
+function readSession(v: unknown): SessionRef | null {
+  if (!isObj(v)) return null;
+  const id = typeof v.id === "string" ? v.id : "";
+  if (id === "") return null;
+  return {
+    id,
+    adminToken: typeof v.adminToken === "string" ? v.adminToken : "",
+    closedAt: typeof v.closedAt === "string" ? v.closedAt : null,
+  };
 }
 
 /** Stable id generator (crypto.randomUUID with a fallback). */
@@ -100,6 +154,7 @@ export function loadState(): AppState {
     const settings: Settings = {
       spinMs: clampSpinMs(Number((data.settings as Settings)?.spinMs)),
       sound: (data.settings as Settings)?.sound ?? DEFAULT_SETTINGS.sound,
+      mode: readMode((data.settings as Settings)?.mode),
     };
     const records = Array.isArray(data.records)
       ? (data.records as unknown[]).filter(isObj).map((r) => ({
@@ -110,7 +165,14 @@ export function loadState(): AppState {
         }))
       : [];
 
-    return { participants, prizes, settings, records };
+    return {
+      participants,
+      prizes,
+      settings,
+      records,
+      picks: readPicks(data.picks),
+      session: readSession(data.session),
+    };
   } catch {
     return base;
   }

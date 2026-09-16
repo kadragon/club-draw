@@ -1,4 +1,4 @@
-import type { Participant, RandomSource, Wheel } from "./types.js";
+import type { DrawMode, Participant, PicksMap, RandomSource, Wheel } from "./types.js";
 
 /** Web Crypto adapter satisfying the narrow {@link RandomSource} shape. */
 const defaultRng: RandomSource = {
@@ -58,6 +58,47 @@ export function slotsFor(participant: Participant, baseSlots: number): number {
 /** Candidates = participants not excluded (session winners are excluded). */
 export function candidatesFrom(participants: readonly Participant[]): Participant[] {
   return participants.filter((p) => !p.excluded);
+}
+
+/** Outcome of {@link candidatesFor}: the pool, plus whether the preference filter was abandoned. */
+export interface CandidatePool {
+  candidates: Participant[];
+  /**
+   * True when preference mode found no eligible picker and widened the pool to
+   * every remaining participant. The UI surfaces this as a badge — the operator
+   * must be able to say on stage why a non-picker is on the wheel.
+   */
+  fellBack: boolean;
+}
+
+/**
+ * Candidate pool for one prize.
+ *
+ * `"all"` mode is the original behaviour: everyone who has not won yet. `"preference"`
+ * intersects that with the prize's pickers, and falls back to the same all-remaining
+ * pool when the intersection is empty — nobody picked it, or every picker already won
+ * an earlier prize. Falling back rather than skipping keeps the prize from going
+ * unclaimed; the caller shows a badge on `fellBack`.
+ *
+ * `fellBack` reports that the pool was genuinely widened past the pickers, so it stays
+ * false when nothing remained to widen to — an empty wheel is not a fallback.
+ *
+ * Roster order is preserved (not pick order) so the wheel layout stays stable across
+ * prizes. Ids in `picks` that are not on the roster are ignored — a snapshot can
+ * outlive a roster edit.
+ */
+export function candidatesFor(
+  participants: readonly Participant[],
+  mode: DrawMode,
+  picks: PicksMap,
+  prizeId: string,
+): CandidatePool {
+  const remaining = candidatesFrom(participants);
+  if (mode !== "preference") return { candidates: remaining, fellBack: false };
+  const pickers = new Set(picks[prizeId] ?? []);
+  const preferred = remaining.filter((p) => pickers.has(p.id));
+  if (preferred.length > 0) return { candidates: preferred, fellBack: false };
+  return { candidates: remaining, fellBack: remaining.length > 0 };
 }
 
 /**
