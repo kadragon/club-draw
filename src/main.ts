@@ -247,9 +247,7 @@ function renderParticipants() {
       state.participants = state.participants.filter((x) => x.id !== p.id);
       editingWinsId = null;
       persist();
-      renderParticipants();
-      rebuildWheel();
-      syncControls();
+      renderRoster();
     },
     {
       editingId: editingWinsId,
@@ -273,9 +271,7 @@ function renderParticipants() {
         }
         state.participants = updated;
         persist();
-        renderParticipants();
-        rebuildWheel();
-        syncControls();
+        renderRoster();
       },
     },
   );
@@ -330,8 +326,10 @@ function syncControls() {
   const drawnCount = state.prizes.filter((p) => p.drawn).length;
 
   // Preference badge is stage-visible on purpose: the operator has to be able to say
-  // out loud why a non-picker is on the wheel the moment the pool falls back.
-  if (state.settings.mode !== "preference") {
+  // out loud why a non-picker is on the wheel the moment the pool falls back. With no
+  // pending prize there is no pool to describe (`poolFor(null)` never falls back), so
+  // the badge would otherwise claim a filter that is not being applied to anything.
+  if (state.settings.mode !== "preference" || !cur) {
     els.modeBadge.hidden = true;
     els.modeBadge.textContent = "";
     els.modeBadge.classList.remove("is-fallback");
@@ -367,6 +365,18 @@ function syncControls() {
   } else {
     els.status.textContent = "";
   }
+}
+
+/**
+ * Re-render everything a roster change touches. The prize list carries per-prize
+ * candidate counts under preference mode, so adding, removing or re-weighting a
+ * participant changes it too — rendering only the roster leaves those badges stale.
+ */
+function renderRoster() {
+  renderParticipants();
+  renderPrizes();
+  rebuildWheel();
+  syncControls();
 }
 
 function renderAll() {
@@ -510,9 +520,7 @@ els.pForm.addEventListener("submit", (e) => {
   els.pWins.value = "0";
   els.pName.focus();
   persist();
-  renderParticipants();
-  rebuildWheel();
-  syncControls();
+  renderRoster();
 });
 
 els.zForm.addEventListener("submit", (e) => {
@@ -562,9 +570,7 @@ async function applyRoster(text: string) {
   for (const row of fresh) state.participants.push(makeParticipant(row.name, row.cumulativeWins));
   els.rosterText.value = "";
   persist();
-  renderParticipants();
-  rebuildWheel();
-  syncControls();
+  renderRoster();
   els.status.textContent =
     duplicates.length > 0
       ? `${fresh.length}명 추가됨 · 중복 ${duplicates.length}명 제외`
