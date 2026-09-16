@@ -99,6 +99,8 @@ function renderForm(): void {
   const claim = claims[me.id];
   el.name.textContent = me.name;
   el.change.hidden = readOnly;
+  // Switching participant mid-submit would land the response message on the wrong name.
+  el.change.disabled = busy;
   el.count.textContent = readOnly
     ? `선택 ${selected.length}개`
     : `${selected.length} / ${MAX_PICKS}개 선택 · 최대 ${MAX_PICKS}개`;
