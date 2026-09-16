@@ -456,6 +456,11 @@ body {
 .mode-badge.is-fallback {
   background: var(--peach);
 }
+/* `display` above outranks the UA `[hidden] { display: none }`, so all-participants
+   mode would otherwise leave an empty pill on screen. */
+.mode-badge[hidden] {
+  display: none;
+}
 .li-badge.is-fallback {
   background: var(--peach);
 }

@@ -301,7 +301,11 @@ function renderPrizes() {
       persist();
       renderPrizes();
       syncControls();
-      refreshIdle(); // removing the last pending prize must stop idle drift
+      // The pool is prize-scoped, so changing WHICH prize is current is wheel
+      // geometry: without the rebuild the canvas would keep the deleted prize's
+      // pool while spin() draws from the next one. rebuildWheel also refreshes
+      // idle, which removing the last pending prize must do.
+      rebuildWheel();
     },
     (z) => {
       if (!showPools) return null;
@@ -522,7 +526,9 @@ els.zForm.addEventListener("submit", (e) => {
   persist();
   renderPrizes();
   syncControls();
-  refreshIdle(); // a first/again-available prize may now permit idle drift
+  // Same reason as the delete path: a first/again-available prize changes the pool
+  // the wheel must show (and may permit idle drift again).
+  rebuildWheel();
 });
 
 /**
