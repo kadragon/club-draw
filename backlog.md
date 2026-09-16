@@ -25,6 +25,6 @@
 
 ## Review Backlog
 
-### PR #43 — preference draw mode: pure candidate/pick logic and state schema (2026-09-16)
+### PR #45 — clear preference picks and session on backup restore and session reset (2026-09-16)
 
-- [ ] [debt] `applyRestore`가 참가자·상품 id를 새로 발급하면서 `state.picks`·`state.session`을 그대로 남겨, 복원 후 선호 모드가 전 상품 폴백으로 조용히 돌아감. 세션 리셋도 `session`을 비우지 않음. 복원·리셋 시 `picks: {}`·`session: null`로 비울 것 (source: code-review) — src/main.ts:685, src/main.ts:644
+- [ ] [debt] 세션 리셋·백업 복원이 `state.session`(운영자 `adminToken` 포함)을 비워, 서버 세션이 열린 채면 마감·재pull·삭제 경로를 잃음. 운영자 세션 UI 구현 시 열린 세션이 있으면 리셋/복원 전에 마감·삭제를 유도하거나 차단할 것 (source: code-review) — src/state.ts:220 *(blocked by: 4-operator-session-ui)*

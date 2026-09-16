@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  applyBackupData,
   canDeleteParticipant,
   DEFAULT_SETTINGS,
   defaultState,
   loadState,
   normalizeWins,
+  resetSessionState,
   SPIN_MS_MAX,
   SPIN_MS_MIN,
   setParticipantWins,
@@ -265,5 +267,46 @@ describe("loadState — preference mode fields", () => {
     expect(s.settings.mode).toBe("all");
     expect(s.picks).toEqual({});
     expect(s.session).toBeNull();
+  });
+});
+
+describe("resetSessionState / applyBackupData — preference data", () => {
+  const seeded = () => {
+    const s = defaultState();
+    s.settings.mode = "preference";
+    s.participants = [p("a", { cumulativeWins: 2, excluded: true })];
+    s.prizes = [{ id: "z1", name: "gift", drawn: true, winnerId: "a" }];
+    s.records = [{ prize: "gift", winner: "a", winnerId: "a", at: "t" }];
+    s.picks = { z1: ["a"] };
+    s.session = { id: "s1", adminToken: "t1", closedAt: null };
+    return s;
+  };
+
+  it("session reset clears picks and session but keeps roster, carry-over, and settings", () => {
+    const s = seeded();
+    resetSessionState(s);
+    expect(s.picks).toEqual({});
+    expect(s.session).toBeNull();
+    expect(s.records).toEqual([]);
+    expect(s.participants).toEqual([p("a", { cumulativeWins: 2, excluded: false })]);
+    expect(s.prizes).toEqual([{ id: "z1", name: "gift", drawn: false, winnerId: undefined }]);
+    expect(s.settings.mode).toBe("preference");
+  });
+
+  it("restore replaces roster/prizes with fresh ids and clears picks, session, and records", () => {
+    const s = seeded();
+    applyBackupData(s, {
+      participants: [{ name: "B", cumulativeWins: 1 }],
+      prizes: [{ name: "cup" }],
+    });
+    expect(s.picks).toEqual({});
+    expect(s.session).toBeNull();
+    expect(s.records).toEqual([]);
+    expect(s.participants.map(({ name, cumulativeWins }) => ({ name, cumulativeWins }))).toEqual([
+      { name: "B", cumulativeWins: 1 },
+    ]);
+    expect(s.participants[0]!.id).not.toBe("a");
+    expect(s.prizes.map((z) => z.name)).toEqual(["cup"]);
+    expect(s.settings.mode).toBe("preference");
   });
 });

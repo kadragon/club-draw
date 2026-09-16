@@ -211,6 +211,42 @@ export function canDeleteParticipant(
   return !state.prizes.some((z) => z.winnerId === id);
 }
 
+/**
+ * Clear per-session draw results in place: winners return to the wheel, prizes
+ * become undrawn, records empty. Roster, prizes, carry-over, and settings stay.
+ * The preference snapshot and session handle go too — they belong to the round
+ * being reset, and a stale session would keep feeding its picks into the next one.
+ */
+export function resetSessionState(state: AppState): void {
+  for (const p of state.participants) p.excluded = false;
+  for (const z of state.prizes) {
+    z.drawn = false;
+    z.winnerId = undefined;
+  }
+  state.records = [];
+  state.picks = {};
+  state.session = null;
+}
+
+/**
+ * Replace roster and prizes from a backup in place, issuing fresh ids. Picks and the
+ * session handle are keyed by the old ids, so they are cleared rather than left to
+ * silently match nothing (which degrades preference mode to the all-prizes fallback).
+ */
+export function applyBackupData(
+  state: AppState,
+  data: {
+    participants: readonly { name: string; cumulativeWins: number }[];
+    prizes: readonly { name: string }[];
+  },
+): void {
+  state.participants = data.participants.map((p) => makeParticipant(p.name, p.cumulativeWins));
+  state.prizes = data.prizes.map((z) => makePrize(z.name));
+  state.records = [];
+  state.picks = {};
+  state.session = null;
+}
+
 export function makeParticipant(name: string, cumulativeWins = 0): Participant {
   return { id: uid(), name, cumulativeWins, excluded: false };
 }
