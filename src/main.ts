@@ -713,7 +713,12 @@ els.resultCopy.addEventListener("click", async () => {
 
 els.resetSession.addEventListener("click", async () => {
   if (spinLocked()) return;
-  if (!(await confirmModal("세션 당첨/기록을 초기화할까요? (참가자·상품·누적값은 유지)"))) return;
+  if (
+    !(await confirmModal(
+      "세션 당첨/기록과 선호 선택·세션 연결을 초기화할까요? (참가자·상품·누적값은 유지)",
+    ))
+  )
+    return;
   resetSessionState(state);
   els.overlay.hidden = true;
   wheel.setHighlight(null); // drop any lingering reveal spotlight before rebuilding
