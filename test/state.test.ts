@@ -120,7 +120,7 @@ describe("loadState", () => {
 
   it("keeps a spinMs inside the supported range", () => {
     put({ settings: { spinMs: 7500, sound: false } });
-    expect(loadState().settings).toEqual({ spinMs: 7500, sound: false });
+    expect(loadState().settings).toEqual({ spinMs: 7500, sound: false, mode: "all" });
   });
 
   it("clamps spinMs to the SPIN_MS bounds and falls back on a non-finite value", () => {
@@ -197,5 +197,73 @@ describe("setParticipantWins", () => {
   it("preserves the excluded flag", () => {
     const next = setParticipantWins([p("a", { excluded: true })], "a", 3);
     expect(next[0]!.excluded).toBe(true);
+  });
+});
+
+// ── preference mode schema (mode / picks / session) ─────────────────────────
+
+describe("loadState — preference mode fields", () => {
+  it("loads a pre-v2 payload with no mode/picks/session as the all-participants default", () => {
+    put({
+      participants: [{ id: "a", name: "A", cumulativeWins: 0 }],
+      prizes: [{ id: "z1", name: "gift" }],
+      settings: { spinMs: 5000, sound: true },
+      records: [],
+    });
+    const s = loadState();
+    expect(s.settings.mode).toBe("all");
+    expect(s.picks).toEqual({});
+    expect(s.session).toBeNull();
+  });
+
+  it("round-trips a preference-mode payload", () => {
+    put({
+      participants: [],
+      prizes: [],
+      settings: { spinMs: 5000, sound: true, mode: "preference" },
+      records: [],
+      picks: { z1: ["a", "b"], z2: [] },
+      session: { id: "s1", adminToken: "t1", closedAt: "2026-09-16T00:00:00.000Z" },
+    });
+    const s = loadState();
+    expect(s.settings.mode).toBe("preference");
+    expect(s.picks).toEqual({ z1: ["a", "b"], z2: [] });
+    expect(s.session).toEqual({
+      id: "s1",
+      adminToken: "t1",
+      closedAt: "2026-09-16T00:00:00.000Z",
+    });
+  });
+
+  it("falls back to all mode on an unrecognized mode string", () => {
+    put({ settings: { spinMs: 5000, sound: true, mode: "roulette-supreme" } });
+    expect(loadState().settings.mode).toBe("all");
+  });
+
+  it("drops a non-array picks entry and non-string ids, and collapses duplicates", () => {
+    put({ picks: { z1: ["a", "a", 7, null, "b"], z2: "nope", z3: ["c"] } });
+    expect(loadState().picks).toEqual({ z1: ["a", "b"], z3: ["c"] });
+  });
+
+  it("treats a non-object picks payload as empty", () => {
+    put({ picks: ["a", "b"] });
+    expect(loadState().picks).toEqual({});
+  });
+
+  it("drops a session without a usable id", () => {
+    put({ session: { adminToken: "t1" } });
+    expect(loadState().session).toBeNull();
+  });
+
+  it("keeps a session with no closedAt (still open)", () => {
+    put({ session: { id: "s1", adminToken: "t1" } });
+    expect(loadState().session).toEqual({ id: "s1", adminToken: "t1", closedAt: null });
+  });
+
+  it("defaultState starts in all mode with no picks or session", () => {
+    const s = defaultState();
+    expect(s.settings.mode).toBe("all");
+    expect(s.picks).toEqual({});
+    expect(s.session).toBeNull();
   });
 });
