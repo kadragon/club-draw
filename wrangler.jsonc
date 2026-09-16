@@ -3,8 +3,19 @@
   "name": "club-draw",
   "account_id": "6ed03d41ee9287a3e0e5bde9a6772812",
   "compatibility_date": "2026-01-01",
+  "main": "worker/index.ts",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
-  }
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "club-draw-db",
+      "database_id": "6df08702-1d10-4848-9de3-a5b85942afd9",
+      "migrations_dir": "migrations"
+    }
+  ]
 }
