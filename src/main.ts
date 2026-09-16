@@ -716,6 +716,7 @@ els.sMode.addEventListener("change", () => {
 });
 
 els.sessionOpen.addEventListener("click", () => {
+  if (spinLocked()) return;
   const built = buildSessionPayload(state.participants, state.prizes);
   if (!built.ok) {
     els.sessionMsg.textContent = {
@@ -728,11 +729,21 @@ els.sessionOpen.addEventListener("click", () => {
   }
   void runSessionStep(async () => {
     const { sessionId, adminToken } = await openSession(fetchApi, built.payload);
+    // The request is awaited. A backup restore meanwhile re-issued every id, so the
+    // server roster would match nothing locally and every prize would silently fall back.
+    const known = new Set(state.participants.map((p) => p.id));
+    if (!built.payload.participants.some((p) => known.has(p.id))) {
+      els.sessionMsg.textContent = "요청 중 명단이 교체되었습니다. 세션을 다시 개설하세요.";
+      return;
+    }
     // Picks from any earlier round belong to that round's session, not this one.
     state.session = { id: sessionId, adminToken, closedAt: null };
     state.picks = {};
     persist();
-    renderAll();
+    // Never rebuild the wheel mid-spin/reveal: the landing wedge must stay the drawn one.
+    // The token is already saved; the post-reveal advance re-renders the cleared pools.
+    if (spinLocked()) renderSession();
+    else renderAll();
     els.sessionMsg.textContent = "세션을 열었습니다. 운영자 토큰을 복사해 보관하세요.";
   });
 });
