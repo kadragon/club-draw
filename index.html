@@ -110,6 +110,7 @@
           <h2 class="card-title">선호 접수</h2>
           <div id="session-new">
             <p class="hint">현재 명단·상품으로 접수 세션을 열고, 참가자는 QR로 상품을 최대 3개 고릅니다.</p>
+            <p class="hint">개설하면 참가자·상품 이름이 서버에 저장됩니다. 추첨을 마친 뒤 "서버에서 세션 삭제"로 지우세요.</p>
             <button id="session-open" class="btn btn-primary" type="button">세션 개설</button>
           </div>
           <div id="session-live" class="session-live" hidden>
@@ -133,6 +134,8 @@
               <button id="session-close" class="btn btn-primary" type="button">접수 마감</button>
               <button id="session-pull" class="btn btn-secondary" type="button">선택 결과 가져오기</button>
             </div>
+            <p class="hint">명단 이름은 삭제할 때까지 서버에 남습니다. 가져온 선택은 삭제 후에도 이 기기에서 추첨에 쓰입니다.</p>
+            <button id="session-delete" class="btn btn-ghost btn-sm" type="button">서버에서 세션 삭제</button>
           </div>
           <p id="session-msg" class="hint" role="status" aria-live="polite"></p>
         </section>

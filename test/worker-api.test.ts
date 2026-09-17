@@ -7,6 +7,7 @@ import {
 } from "../src/pick-client";
 import {
   closeSession as clientClose,
+  deleteSession as clientDelete,
   openSession as clientOpen,
   pullSnapshot as clientPull,
 } from "../src/session";
@@ -199,6 +200,60 @@ describe("operator endpoints", () => {
   });
 });
 
+describe("session deletion", () => {
+  async function rowCounts(sessionId: string): Promise<number[]> {
+    const tables = ["session", "session_participant", "session_prize", "pick"];
+    return Promise.all(
+      tables.map(async (t) => {
+        const col = t === "session" ? "id" : "session_id";
+        const row = await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${t} WHERE ${col} = ?1`)
+          .bind(sessionId)
+          .first<{ n: number }>();
+        return row!.n;
+      }),
+    );
+  }
+
+  it("refuses deletion without or with a wrong token and keeps the data", async () => {
+    const { sessionId } = await openSession();
+    await pick(sessionId, { participantId: "p1", prizeIds: ["a"] });
+    expect((await call("DELETE", `/api/session/${sessionId}`)).status).toBe(401);
+    expect((await call("DELETE", `/api/session/${sessionId}`, undefined, "wrong")).status).toBe(
+      401,
+    );
+    expect(await rowCounts(sessionId)).toEqual([1, 3, 4, 1]);
+    expect((await call("GET", `/api/session/${sessionId}`)).status).toBe(200);
+  });
+
+  it("removes every row of the session so the pick page 404s, leaving other sessions", async () => {
+    const other = await openSession();
+    const { sessionId, adminToken } = await openSession();
+    await pick(sessionId, { participantId: "p2", prizeIds: ["b", "c"] });
+
+    const res = await call("DELETE", `/api/session/${sessionId}`, undefined, adminToken);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ deleted: true });
+    expect(await rowCounts(sessionId)).toEqual([0, 0, 0, 0]);
+    expect((await call("GET", `/api/session/${sessionId}`)).status).toBe(404);
+    expect((await call("DELETE", `/api/session/${sessionId}`, undefined, adminToken)).status).toBe(
+      404,
+    );
+    expect((await call("GET", `/api/session/${other.sessionId}`)).status).toBe(200);
+  });
+
+  it("deletes through src/session.ts and treats an already-deleted session as done", async () => {
+    const fetchApi = (url: string, init?: RequestInit) =>
+      worker.fetch(new Request(`http://local${url}`, init), env);
+    const { sessionId, adminToken } = await clientOpen(fetchApi, roster);
+    await expect(clientDelete(fetchApi, sessionId, "wrong")).rejects.toMatchObject({
+      code: "unauthorized",
+    });
+    await clientDelete(fetchApi, sessionId, adminToken);
+    await clientDelete(fetchApi, sessionId, adminToken);
+    await expect(clientFetchPick(fetchApi, sessionId)).rejects.toMatchObject({ code: "not-found" });
+  });
+});
+
 describe("operator client round-trip", () => {
   it("opens, closes and pulls through src/session.ts against the real Worker", async () => {
     const fetchApi = (url: string, init?: RequestInit) =>
@@ -252,6 +307,7 @@ describe("routing", () => {
   it("passes non-API paths to assets and 404s unknown API paths", async () => {
     expect(await (await call("GET", "/")).text()).toBe("asset");
     expect((await call("GET", "/api/unknown")).status).toBe(404);
-    expect((await call("DELETE", "/api/session/x")).status).toBe(405);
+    expect((await call("PATCH", "/api/session/x")).status).toBe(405);
+    expect((await call("DELETE", "/api/session")).status).toBe(405);
   });
 });

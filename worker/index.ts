@@ -273,6 +273,22 @@ async function snapshot(request: Request, env: Env, id: string): Promise<Respons
   return json(200, { closedAt: session.closed_at, picks: map });
 }
 
+/**
+ * Operator-only erase of everything the session put on the server (roster names
+ * included). Retention is manual: nothing expires on its own, so this is the path
+ * that takes the names back off D1 after the event.
+ */
+async function deleteSession(request: Request, env: Env, id: string): Promise<Response> {
+  const session = await authorize(request, env, id);
+  if (session instanceof Response) return session;
+  await env.DB.batch(
+    ["pick", "session_prize", "session_participant"]
+      .map((table) => env.DB.prepare(`DELETE FROM ${table} WHERE session_id = ?1`).bind(id))
+      .concat(env.DB.prepare("DELETE FROM session WHERE id = ?1").bind(id)),
+  );
+  return json(200, { deleted: true });
+}
+
 async function handleApi(request: Request, env: Env, path: string): Promise<Response> {
   const method = request.method;
   if (path === "/api/session") {
@@ -286,7 +302,9 @@ async function handleApi(request: Request, env: Env, path: string): Promise<Resp
   } catch {
     return fail(404, "not-found");
   }
-  const expected = { "": "GET", pick: "PUT", close: "POST", snapshot: "GET" }[m[2] ?? ""];
+  const tail = m[2] ?? "";
+  if (tail === "" && method === "DELETE") return deleteSession(request, env, id);
+  const expected = { "": "GET", pick: "PUT", close: "POST", snapshot: "GET" }[tail];
   if (method !== expected) return fail(405, "method-not-allowed");
   switch (m[2]) {
     case "pick":
