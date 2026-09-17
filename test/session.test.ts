@@ -7,6 +7,7 @@ import {
   pickUrl,
   pullSnapshot,
   SessionApiError,
+  sessionDiscardWarning,
   sessionErrorMessage,
 } from "../src/session.js";
 import { makeParticipant, makePrize } from "../src/state.js";
@@ -75,5 +76,25 @@ describe("request errors", () => {
       "t",
     );
     expect(snap.picks).toEqual({ a: ["p1"] });
+  });
+});
+
+describe("sessionDiscardWarning", () => {
+  it("is empty without a session handle, so reset/restore prompts stay unchanged", () => {
+    expect(sessionDiscardWarning(null)).toBe("");
+  });
+
+  it("warns that an open session keeps accepting picks and must be closed/deleted first", () => {
+    const w = sessionDiscardWarning({ id: "s", adminToken: "t", closedAt: null });
+    expect(w).toContain("접수 중");
+    expect(w).toContain("운영자 토큰");
+    expect(w).toContain("세션 삭제");
+  });
+
+  it("still warns for a closed session, whose server data can only be deleted with the token", () => {
+    const w = sessionDiscardWarning({ id: "s", adminToken: "t", closedAt: "2026-09-17T00:00:00Z" });
+    expect(w).not.toContain("접수 중");
+    expect(w).toContain("운영자 토큰");
+    expect(w).toContain("세션 삭제");
   });
 });

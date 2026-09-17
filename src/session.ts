@@ -1,5 +1,5 @@
 import { readPicks } from "./state.js";
-import type { Participant, PicksMap, Prize } from "./types.js";
+import type { Participant, PicksMap, Prize, SessionRef } from "./types.js";
 
 /**
  * Operator-side client for the preference-session API (`worker/index.ts`).
@@ -144,6 +144,18 @@ export async function deleteSession(fetchFn: FetchLike, id: string, token: strin
 /** How many distinct participants made at least one pick — the operator's pull summary. */
 export function countPickers(picks: PicksMap): number {
   return new Set(Object.values(picks).flat()).size;
+}
+
+/**
+ * Confirm-prompt suffix for actions that drop the session handle (reset, restore).
+ * The admin token lives only in that handle, so discarding it strands the server
+ * session: no more close, pull, or delete. Guides rather than blocks — a hard block
+ * would lock the operator out whenever the server is unreachable.
+ */
+export function sessionDiscardWarning(session: SessionRef | null): string {
+  if (!session) return "";
+  const open = session.closedAt === null ? " 서버 세션이 아직 접수 중이며," : "";
+  return ` 주의:${open} 계속하면 운영자 토큰이 지워져 서버 세션을 마감·삭제할 수 없습니다. 먼저 '서버에서 세션 삭제'를 권장합니다.`;
 }
 
 /** Operator-facing Korean text for an API failure. */
