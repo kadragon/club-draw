@@ -737,6 +737,12 @@ els.sessionOpen.addEventListener("click", () => {
     // server roster would match nothing locally and every prize would silently fall back.
     const known = new Set(state.participants.map((p) => p.id));
     if (!built.payload.participants.some((p) => known.has(p.id))) {
+      // The token is dropped here, so this is the last chance to remove the orphan.
+      try {
+        await deleteSession(fetchApi, sessionId, adminToken);
+      } catch (err) {
+        console.warn("orphan session delete failed:", err);
+      }
       els.sessionMsg.textContent = "요청 중 명단이 교체되었습니다. 세션을 다시 개설하세요.";
       return;
     }
