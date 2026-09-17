@@ -33,6 +33,7 @@ import {
   openSession,
   pickUrl,
   pullSnapshot,
+  sessionDiscardWarning,
   sessionErrorMessage,
 } from "./session.js";
 import { playFanfare, playTick, unlockAudio } from "./sound.js";
@@ -892,7 +893,7 @@ els.resetSession.addEventListener("click", async () => {
   if (spinLocked()) return;
   if (
     !(await confirmModal(
-      "세션 당첨/기록과 선호 선택·세션 연결을 초기화할까요? (참가자·상품·누적값은 유지)",
+      `세션 당첨/기록과 선호 선택·세션 연결을 초기화할까요? (참가자·상품·누적값은 유지)${sessionDiscardWarning(state.session)}`,
     ))
   )
     return;
@@ -927,7 +928,11 @@ async function applyRestore(token: string) {
     els.status.textContent = "백업이 비어 있습니다.";
     return;
   }
-  if (!(await confirmModal("현재 데이터를 백업 내용으로 교체할까요? (세션 기록은 초기화됩니다)")))
+  if (
+    !(await confirmModal(
+      `현재 데이터를 백업 내용으로 교체할까요? (세션 기록은 초기화됩니다)${sessionDiscardWarning(state.session)}`,
+    ))
+  )
     return;
   applyBackupData(state, data);
   els.overlay.hidden = true;
