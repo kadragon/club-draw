@@ -1,11 +1,12 @@
 # AGENTS.md — club-draw
 
-소형 vanilla TS SPA. 에이전트가 반드시 지켜야 할 불변식과 작업 규칙.
+소형 vanilla TS SPA + 선호 모드용 Worker/D1 API. 에이전트가 반드시 지켜야 할 불변식과 작업 규칙.
 
 ## Docs Index (필요할 때만 읽기)
 
 - `docs/architecture.md` — 모듈 책임·의존 방향
-- `docs/runbook.md` — 명령·배포 체크·실패 모드
+- `docs/runbook.md` — 명령·D1 마이그레이션·세션 운영·배포 체크·실패 모드
+- `docs/design/preference-draw-mode.md` — 선호 모드 설계·결정 근거
 - `backlog.md` — 작업 큐
 - `DESIGN.md` — 비주얼/팔레트/레이아웃
 
@@ -19,6 +20,12 @@
   - 회전 R 적용 시 포인터 아래 칸 = `φ = (−R) mod 2π` → `wedgeAtPointer`.
   - Canvas는 3시 기준이므로 그릴 때 `canvasAngle = φ − π/2`, `ctx.rotate(+R)`, 포인터는 상단 고정.
 - 이 규약을 바꾸면 **두 파일을 함께** 바꾸고, 부호 뒤집기 테스트로 검증할 것(아래).
+
+**추첨 방식(`settings.mode`: `all`/`preference`)은 후보 집합만 바꾼다** — `candidatesFor`(`src/draw.ts`).
+- 선호 모드 후보 = `picks[prizeId] ∩ 미당첨자`, 비면 미당첨자 전원 폴백(`fellBack` → UI 배지).
+- 가중치 base(`effectiveBaseSlots`)는 **전체 명부** 기준, `selectWinner`·각도 규약은 모드와 무관.
+- 추첨 경로는 **오프라인**: 네트워크는 세션 개설·마감·pull·삭제에만. 스핀 중 `/api` 호출 금지.
+- 1인 최대 선택 수는 `MAX_PICKS`(`src/picks.ts`) 단일 출처 — 폼·Worker 검증 공용. 리터럴 금지.
 
 ## TDD / 검증
 
