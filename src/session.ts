@@ -125,6 +125,22 @@ export async function pullSnapshot(
   return { closedAt: body.closedAt, picks: readPicks(body.picks) };
 }
 
+/**
+ * Erase the session from the server. A 404 means it is already gone, which is the
+ * outcome the operator asked for, so it resolves instead of throwing.
+ */
+export async function deleteSession(fetchFn: FetchLike, id: string, token: string): Promise<void> {
+  try {
+    await request<{ deleted?: unknown }>(fetchFn, sessionPath(id), {
+      method: "DELETE",
+      headers: auth(token),
+    });
+  } catch (err) {
+    if (err instanceof SessionApiError && err.status === 404) return;
+    throw err;
+  }
+}
+
 /** How many distinct participants made at least one pick — the operator's pull summary. */
 export function countPickers(picks: PicksMap): number {
   return new Set(Object.values(picks).flat()).size;

@@ -29,6 +29,7 @@ import {
   buildSessionPayload,
   closeSession,
   countPickers,
+  deleteSession,
   openSession,
   pickUrl,
   pullSnapshot,
@@ -118,6 +119,7 @@ const els = {
   sessionTokenCopy: $("session-token-copy") as HTMLButtonElement,
   sessionClose: $("session-close") as HTMLButtonElement,
   sessionPull: $("session-pull") as HTMLButtonElement,
+  sessionDelete: $("session-delete") as HTMLButtonElement,
   sessionMsg: $("session-msg"),
 };
 
@@ -445,6 +447,7 @@ function renderSession() {
   }
   els.sessionClose.disabled = sessionBusy || s.closedAt !== null;
   els.sessionPull.disabled = sessionBusy || s.closedAt === null;
+  els.sessionDelete.disabled = sessionBusy;
 }
 
 async function runSessionStep(step: () => Promise<void>) {
@@ -759,6 +762,25 @@ els.sessionClose.addEventListener("click", () => {
   });
 });
 els.sessionPull.addEventListener("click", () => void runSessionStep(pullPicks));
+els.sessionDelete.addEventListener("click", async () => {
+  const s = state.session;
+  if (!s || sessionBusy) return;
+  const warn =
+    s.closedAt === null ? " 접수가 아직 열려 있어 참가자가 더는 선택할 수 없게 됩니다." : "";
+  if (!(await confirmModal(`서버에서 세션과 명단 이름을 삭제할까요?${warn} (되돌릴 수 없음)`))) {
+    return;
+  }
+  void runSessionStep(async () => {
+    await deleteSession(fetchApi, s.id, s.adminToken);
+    // The request is awaited: a reset or a new session meanwhile owns the handle now.
+    if (state.session !== s) return;
+    // Pulled picks stay: they are local and the draw runs offline from them.
+    state.session = null;
+    persist();
+    renderSession();
+    els.sessionMsg.textContent = "서버에서 세션을 삭제했습니다.";
+  });
+});
 
 async function copyField(input: HTMLInputElement, button: HTMLButtonElement) {
   try {
