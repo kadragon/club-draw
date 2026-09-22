@@ -658,14 +658,66 @@ body {
 .ladder-wrap[hidden] {
   display: none;
 }
-.ladder {
+.ladder-stage {
+  position: relative;
   width: min(100%, 1100px);
+}
+.ladder {
+  width: 100%;
   height: min(56vh, 620px);
   display: block;
   background: var(--card);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft);
+}
+.ladder-slots {
+  position: absolute;
+  inset: 1px 1px auto; /* inside the canvas border; height set from the label band */
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+}
+.ladder-slots button {
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  cursor: pointer;
+}
+.ladder-slots button:disabled {
+  cursor: default;
+}
+.ladder-slots.is-armed button:not(:disabled):hover,
+.ladder-slots button:focus-visible {
+  outline: 3px solid var(--pink);
+  outline-offset: -3px;
+}
+.ladder-roster {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: min(100%, 1100px);
+}
+.ladder-roster[hidden] {
+  display: none;
+}
+.ladder-chip {
+  border: 2px solid transparent;
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+  font: inherit;
+  font-weight: 600;
+  background: var(--chip-bg);
+  color: var(--chip-ink);
+  cursor: pointer;
+}
+.ladder-chip[aria-pressed="true"] {
+  border-color: var(--ink);
+  box-shadow:
+    0 0 0 3px var(--card),
+    0 0 0 5px var(--ink);
 }
 .ladder-actions {
   display: flex;
@@ -1043,8 +1095,10 @@ body.stage-mode .wheel-wrap {
    gates the click handler so the draw can't begin before presenting. Stage mode
    scales it up and lifts the gate once a prize + candidates are available. */
 /* Height-bound like the wheel so title, ladder and controls fit one screen. */
-body.stage-mode .ladder {
+body.stage-mode .ladder-stage {
   width: min(96vw, 1600px);
+}
+body.stage-mode .ladder {
   height: min(52vh, 820px);
 }
 body.stage-mode .ladder-actions .btn {

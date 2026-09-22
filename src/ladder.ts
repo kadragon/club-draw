@@ -159,3 +159,41 @@ export function shuffleSlots(
   while (slots.length < cols) slots.push(null);
   return shuffle(slots, rng);
 }
+
+/** Top slots: column → player id, `null` while the slot is empty. */
+export type Placement = readonly (string | null)[];
+
+/**
+ * Put `id` on `col`. A player holds one slot, so an earlier slot of theirs is
+ * cleared; a different occupant of `col` is bumped back to unplaced. Returns a NEW
+ * placement, the same one when `col` is out of range.
+ */
+export function placeAt(p: Placement, col: number, id: string): Placement {
+  if (!Number.isInteger(col) || col < 0 || col >= p.length) return p;
+  return p.map((cur, c) => (c === col ? id : cur === id ? null : cur));
+}
+
+/** Empty slot `col`, returning a NEW placement. */
+export function clearAt(p: Placement, col: number): (string | null)[] {
+  return p.map((cur, c) => (c === col ? null : cur));
+}
+
+/** Roster ids not on any slot, in roster order. */
+export function unplacedIds(p: Placement, ids: readonly string[]): string[] {
+  const placed = new Set(p);
+  return ids.filter((id) => !placed.has(id));
+}
+
+/**
+ * "나머지 랜덤 배치": shuffle the unplaced roster ids into the empty slots, left to
+ * right. Placed players stay put. Where players start does not affect fairness
+ * (the bottom shuffle at lock does); this only saves the operator clicks.
+ */
+export function fillRandom(
+  p: Placement,
+  ids: readonly string[],
+  rng?: RandomSource,
+): (string | null)[] {
+  const queue = shuffle(unplacedIds(p, ids), rng);
+  return p.map((cur) => (cur === null ? (queue.shift() ?? null) : cur));
+}

@@ -32,7 +32,8 @@ export interface LadderPath {
 
 export interface LadderViewModel {
   ladder: Ladder;
-  top: readonly LadderTopLabel[];
+  /** One per column; null = slot still empty (drawn as its 1-based number). */
+  top: readonly (LadderTopLabel | null)[];
   bottom: readonly LadderBottomLabel[];
   paths: readonly LadderPath[];
 }
@@ -40,6 +41,25 @@ export interface LadderViewModel {
 export interface LadderView {
   setModel(model: LadderViewModel | null): void;
   render(): void;
+}
+
+export interface LadderLayout {
+  /** Lane width: post c sits at (c + 0.5) × spacing. */
+  spacing: number;
+  /** Narrow lanes turn names vertical so 20–30 players still read on a projector. */
+  vertical: boolean;
+  /** Height of the top (and bottom) label band. */
+  band: number;
+}
+
+/**
+ * Lane geometry for a `w`×`h` CSS-px canvas. Exported so the slot buttons laid over
+ * the top band line up with the lanes the canvas draws.
+ */
+export function ladderLayout(w: number, h: number, cols: number): LadderLayout {
+  const spacing = w / Math.max(1, cols);
+  const vertical = spacing < 64;
+  return { spacing, vertical, band: vertical ? Math.min(130, h * 0.24) : 52 };
 }
 
 /** Truncate `text` with an ellipsis until it fits `max` px in the current ctx font. */
@@ -79,11 +99,8 @@ export function createLadderView(canvas: HTMLCanvasElement): LadderView {
     const { ladder, top, bottom, paths } = model;
     const cols = ladder.cols;
     // Each post sits in the middle of an equal-width lane, so labels never cross the edge.
-    const spacing = w / cols;
+    const { spacing, vertical, band } = ladderLayout(w, h, cols);
     const colX = (c: number) => (c + 0.5) * spacing;
-    // Narrow lanes turn names vertical so 20–30 players still read on a projector.
-    const vertical = spacing < 64;
-    const band = vertical ? Math.min(130, h * 0.24) : 52;
     const y0 = band + 8;
     const y1 = h - band - 8;
     const yAt = (y: number) => y0 + (y / (ladder.rows + 1)) * (y1 - y0);
@@ -151,6 +168,8 @@ export function createLadderView(canvas: HTMLCanvasElement): LadderView {
       if (t) {
         const k = t.color % PALETTE.length;
         label(colX(c), topY, t.name, PALETTE[k]!, LABEL_INK[k]!);
+      } else {
+        label(colX(c), topY, String(c + 1), BLANK, MUTED);
       }
       const b = bottom[c];
       if (!b) continue;

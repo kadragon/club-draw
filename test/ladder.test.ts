@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   canPlaceRung,
+  clearAt,
+  fillRandom,
   generateRungs,
   type LADDER_DENSITIES,
   type Ladder,
+  placeAt,
   shuffle,
   shuffleSlots,
   toggleRung,
   traceLadder,
+  unplacedIds,
 } from "../src/ladder.js";
 import type { RandomSource } from "../src/types.js";
 
@@ -204,5 +208,59 @@ describe("shuffleSlots", () => {
   it("equal counts: every prize exactly once, no blanks", () => {
     const slots = shuffleSlots(["p1", "p2", "p3"], 3, lcgRng(7));
     expect([...slots].sort()).toEqual(["p1", "p2", "p3"]);
+  });
+});
+
+describe("placement (column → player id)", () => {
+  it("placeAt puts a player on an empty slot without touching the input", () => {
+    const empty = [null, null, null];
+    expect(placeAt(empty, 1, "a")).toEqual([null, "a", null]);
+    expect(empty).toEqual([null, null, null]);
+  });
+
+  it("placeAt moves a player already placed elsewhere (one slot per player)", () => {
+    expect(placeAt(["a", null, null], 2, "a")).toEqual([null, null, "a"]);
+  });
+
+  it("placeAt onto an occupied slot replaces the occupant, who becomes unplaced", () => {
+    const next = placeAt(["a", "b", null], 1, "c");
+    expect(next).toEqual(["a", "c", null]);
+    expect(unplacedIds(next, ["a", "b", "c"])).toEqual(["b"]);
+  });
+
+  it("placeAt ignores an out-of-range column", () => {
+    const p = [null, null];
+    expect(placeAt(p, 2, "a")).toBe(p);
+    expect(placeAt(p, -1, "a")).toBe(p);
+  });
+
+  it("clearAt empties one slot", () => {
+    expect(clearAt(["a", "b", null], 0)).toEqual([null, "b", null]);
+  });
+
+  it("unplacedIds keeps roster order", () => {
+    expect(unplacedIds([null, "c", "a"], ["a", "b", "c", "d"])).toEqual(["b", "d"]);
+  });
+
+  it("fillRandom shuffles the unplaced players into the empty slots, left to right", () => {
+    // unplaced [a b c] → all-zero shuffle → [b c a] → empty cols 0, 2, 3
+    expect(fillRandom([null, "x", null, null], ["x", "a", "b", "c"], stubRng(0))).toEqual([
+      "b",
+      "x",
+      "c",
+      "a",
+    ]);
+  });
+
+  it("fillRandom leaves already-placed players where they are and fills every slot", () => {
+    const ids = ["a", "b", "c", "d", "e"];
+    const filled = fillRandom(["e", null, "b", null, null], ids, lcgRng(3));
+    expect(filled[0]).toBe("e");
+    expect(filled[2]).toBe("b");
+    expect([...filled].sort()).toEqual(ids);
+  });
+
+  it("fillRandom on a full placement is a no-op copy", () => {
+    expect(fillRandom(["b", "a"], ["a", "b"], stubRng(0))).toEqual(["b", "a"]);
   });
 });
