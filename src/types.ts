@@ -27,6 +27,15 @@ export interface Prize {
 export type DrawMode = "all" | "preference";
 
 /**
+ * How a draw is staged. Orthogonal to {@link DrawMode} (which only shapes the pool).
+ *
+ * - `"wheel"` — one prize per spin, weighted by carry-over (the original).
+ * - `"ladder"` — one 사다리 assigns the leading prizes to the remaining players at once,
+ *   uniformly (no carry-over weighting). Unavailable under `"preference"` mode.
+ */
+export type DrawMethod = "wheel" | "ladder";
+
+/**
  * Collected preferences: prize id -> ids of the participants who picked it.
  *
  * Keyed by prize because that is the lookup every draw performs. A participant
@@ -53,6 +62,8 @@ export interface Settings {
   sound: boolean;
   /** Candidate-pool rule for every prize in the session. */
   mode: DrawMode;
+  /** Presentation / allocation method; see {@link DrawMethod}. */
+  method: DrawMethod;
 }
 
 /** A stamped draw result for the history log / CSV export. */

@@ -6,6 +6,7 @@ import {
   defaultState,
   loadState,
   normalizeWins,
+  recordWin,
   resetSessionState,
   SPIN_MS_MAX,
   SPIN_MS_MIN,
@@ -122,7 +123,12 @@ describe("loadState", () => {
 
   it("keeps a spinMs inside the supported range", () => {
     put({ settings: { spinMs: 7500, sound: false } });
-    expect(loadState().settings).toEqual({ spinMs: 7500, sound: false, mode: "all" });
+    expect(loadState().settings).toEqual({
+      spinMs: 7500,
+      sound: false,
+      mode: "all",
+      method: "wheel",
+    });
   });
 
   it("clamps spinMs to the SPIN_MS bounds and falls back on a non-finite value", () => {
@@ -308,5 +314,54 @@ describe("resetSessionState / applyBackupData — preference data", () => {
     expect(s.participants[0]!.id).not.toBe("a");
     expect(s.prizes.map((z) => z.name)).toEqual(["cup"]);
     expect(s.settings.mode).toBe("preference");
+  });
+});
+
+// ── draw method (wheel / ladder) ─────────────────────────────────────────────
+
+describe("loadState — draw method", () => {
+  it("a payload without method loads as the wheel", () => {
+    put({ settings: { spinMs: 5000, sound: true, mode: "all" } });
+    expect(loadState().settings.method).toBe("wheel");
+  });
+
+  it("round-trips the ladder method", () => {
+    put({ settings: { spinMs: 5000, sound: true, mode: "all", method: "ladder" } });
+    expect(loadState().settings.method).toBe("ladder");
+  });
+
+  it("an unrecognized method degrades to the wheel", () => {
+    put({ settings: { spinMs: 5000, sound: true, mode: "all", method: "plinko" } });
+    expect(loadState().settings.method).toBe("wheel");
+  });
+
+  it("defaultState starts on the wheel", () => {
+    expect(defaultState().settings.method).toBe("wheel");
+  });
+});
+
+describe("recordWin", () => {
+  const AT = "2026-09-22T00:00:00.000Z";
+
+  it("excludes the winner, marks the prize, appends a record — carry-over untouched", () => {
+    const s = defaultState();
+    s.participants = [p("a", { cumulativeWins: 2 }), p("b")];
+    s.prizes = [{ id: "z1", name: "gift" }];
+    expect(recordWin(s, "a", "z1", AT)).toBe(true);
+    expect(s.participants[0]).toMatchObject({ excluded: true, cumulativeWins: 2 });
+    expect(s.participants[1]!.excluded).toBe(false);
+    expect(s.prizes[0]).toMatchObject({ drawn: true, winnerId: "a" });
+    expect(s.records).toEqual([{ prize: "gift", winner: "a", winnerId: "a", at: AT }]);
+  });
+
+  it("unknown winner or prize changes nothing", () => {
+    const s = defaultState();
+    s.participants = [p("a")];
+    s.prizes = [{ id: "z1", name: "gift" }];
+    expect(recordWin(s, "ghost", "z1", AT)).toBe(false);
+    expect(recordWin(s, "a", "nope", AT)).toBe(false);
+    expect(s.participants[0]!.excluded).toBe(false);
+    expect(s.prizes[0]!.drawn).toBeUndefined();
+    expect(s.records).toEqual([]);
   });
 });
