@@ -13,7 +13,7 @@ bun run format     # biome format --write (포맷만)
 bun run typecheck  # tsc --noEmit
 bun run build      # tsc --noEmit + vite build → dist/
 bun run cf:dev     # build + wrangler dev (로컬서 _headers/CSP·Worker·로컬 D1 적용)
-bun run deploy     # build + wrangler deploy
+bun run deploy     # build + D1 migrations apply --remote + wrangler deploy
 ```
 
 ## D1 마이그레이션
@@ -24,7 +24,7 @@ bun run deploy     # build + wrangler deploy
 bunx wrangler d1 migrations list  club-draw-db --local    # 미적용 목록(로컬)
 bunx wrangler d1 migrations apply club-draw-db --local    # cf:dev 전에 1회
 bunx wrangler d1 migrations list  club-draw-db --remote   # 배포 전 원격 확인
-bunx wrangler d1 migrations apply club-draw-db --remote   # 새 마이그레이션이 있을 때 deploy 전에
+bunx wrangler d1 migrations apply club-draw-db --remote   # `bun run deploy`가 자동 실행(미적용분만)
 ```
 
 - 적용된 마이그레이션 파일은 **수정 금지** — 변경은 새 번호 파일로.
@@ -57,7 +57,7 @@ bunx wrangler d1 migrations apply club-draw-db --remote   # 새 마이그레이�
 3. `bun run build` 성공(타입 에러 0).
 4. 각도 규약/스핀 건드렸으면 브라우저서 실제 스핀 → "포인터 아래 이름 == 표시 당첨자"
    (개발 빌드 `window.__cd` 시드, prod strip).
-5. 새 마이그레이션이 있으면 `--remote` apply 후 `bun run deploy`(순서 반대면 Worker가 옛 스키마를 침).
+5. `bun run deploy`는 build → `migrations apply --remote` → `wrangler deploy` 순서라 마이그레이션이 Worker보다 먼저 적용된다. `wrangler deploy`를 직접 쓰지 말 것(스키마 없이 배포돼 `/api/*` 500이 난다).
 6. Worker/세션 흐름 건드렸으면 `bun run cf:dev`에서 두 번째 브라우저 프로필로 개설→제출→마감·pull→
    네트워크 끊고 추첨 끝까지 한 바퀴.
 7. CSP 건드렸으면 `bun run cf:dev` 후 `curl -sI http://localhost:8787` 로 CSP 헤더 +

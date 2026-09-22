@@ -1,6 +1,6 @@
 {
   "name": "club-draw",
-  "version": "1.19.4",
+  "version": "1.19.5",
   "type": "module",
   "private": true,
   "scripts": {
@@ -13,7 +13,7 @@
     "lint": "biome check",
     "lint:fix": "biome check --write",
     "format": "biome format --write",
-    "deploy": "bun run build && wrangler deploy",
+    "deploy": "bun run build && wrangler d1 migrations apply club-draw-db --remote && wrangler deploy",
     "cf:dev": "bun run build && wrangler dev"
   },
   "devDependencies": {
