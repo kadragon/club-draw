@@ -161,9 +161,15 @@
           <button id="spin-btn" class="spin-btn" type="button" aria-disabled="true">START</button>
         </div>
         <div id="ladder-wrap" class="ladder-wrap" hidden>
-          <canvas id="ladder" class="ladder" role="img" aria-label="사다리"></canvas>
+          <div class="ladder-stage">
+            <canvas id="ladder" class="ladder" role="img" aria-label="사다리"></canvas>
+            <!-- Transparent per-lane buttons over the canvas top band: keyboard/SR placement targets. -->
+            <div id="ladder-slots" class="ladder-slots" aria-label="출발 칸"></div>
+          </div>
+          <div id="ladder-roster" class="ladder-roster" aria-label="배치할 참가자"></div>
           <div class="ladder-actions">
             <button id="ladder-new" class="btn btn-secondary" type="button">새 사다리</button>
+            <button id="ladder-fill" class="btn btn-secondary" type="button">나머지 랜덤 배치</button>
             <button id="ladder-lock" class="btn btn-primary" type="button" aria-disabled="true">시작</button>
             <button id="ladder-reveal" class="btn btn-primary" type="button" aria-disabled="true">전체 공개</button>
           </div>

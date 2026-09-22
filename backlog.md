@@ -3,10 +3,6 @@
 진행 중이 아닌 작업 큐. 스프린트 시작 시 `tasks.md`로 이동(스키마는 진행 중에만 존재).
 섹션은 항목 생길 때 추가(Features / Bugs / Tech debt / Ideas).
 
-## 2-ladder-placement — 참가자 위치 지정
-
-- [ ] [FEAT] 사다리 상단 칸 클릭-클릭 배치(명단 칩 선택 → 칸 클릭, 재클릭 해제, `<button>`·`textContent`) + "나머지 랜덤 배치". 수용: 배치 순수 로직 테스트 + 브라우저 확인. 출처: `docs/design/ladder-draw-mode.md`
-
 ## 3-ladder-rung-edit — 가로줄 밀도·수동 편집
 
 - [ ] [FEAT] 가로줄 밀도 3단계(적게/보통/많이) 생성 + 캔버스 클릭 hit-test로 가로줄 추가/삭제(인접 동일 높이 거부), 잠금 후 편집 불가. 수용: 밀도 단조 증가·hit-test 좌표 변환 테스트 + 브라우저 확인. 출처: `docs/design/ladder-draw-mode.md`
@@ -18,3 +14,7 @@
 ## 5-ladder-docs — 공정성 안내·문서 동기화
 
 - [ ] [DOCS] 공정성 모달에 사다리 항목(crypto 셔플·잠금 시 확정·가로줄 편집 결과 무관·가중치 없음) + AGENTS.md Golden Principles 사다리 불변식 한 줄 + `docs/architecture.md` 모듈 표 + `docs/runbook.md` 무대 규칙(잠금 후 새로고침). 출처: `docs/design/ladder-draw-mode.md` *(blocked by: 4-ladder-reveal)*
+
+## Review Backlog
+
+- [ ] [FIX] `src/ladder-view.ts` 라벨 회전 기준(`boxW - 6`)과 말줄임 폭(`boxW - 10`) 불일치 → 좁은 칸에서 폭이 (boxW−10, boxW−6]인 "꽝"·짧은 이름이 가로로 놓여 "…"로 잘림. 회전 기준을 `boxW - 10`으로 맞출 것(agy 리뷰, PR #54 머지 후 도착)
