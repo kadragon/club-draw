@@ -569,9 +569,16 @@ function renderLadder() {
 
 /**
  * Placement controls: one transparent button per lane over the canvas top band, and
- * a chip per unplaced player. Rebuilt on every render — at most 30 of each.
+ * a chip per unplaced player. Rebuilt on every render — at most 30 of each — so the
+ * focused control is re-focused by key afterwards; keyboard placement stays in place.
  */
 function renderLadderPlacement() {
+  const focused = document.activeElement;
+  const focusKey =
+    focused instanceof HTMLElement &&
+    (els.ladderSlots.contains(focused) || els.ladderRoster.contains(focused))
+      ? (focused.dataset.key ?? null)
+      : null;
   const run = ladderRun;
   const open = !!run && run.slots === null;
   const canvas = els.ladderCanvas;
@@ -587,6 +594,7 @@ function renderLadderPlacement() {
       const b = document.createElement("button");
       b.type = "button";
       b.disabled = !open;
+      b.dataset.key = `slot:${c}`;
       const p = run ? playerAt(run, c) : undefined;
       b.setAttribute("aria-label", `${c + 1}번 칸: ${p ? p.name : "비어 있음"}`);
       b.addEventListener("click", () => onLadderSlot(c));
@@ -601,6 +609,7 @@ function renderLadderPlacement() {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "ladder-chip";
+      b.dataset.key = `chip:${p.id}`;
       b.textContent = p.name;
       const k = colorFor(p.id) % PALETTE.length;
       b.style.setProperty("--chip-bg", PALETTE[k]!);
@@ -613,6 +622,12 @@ function renderLadderPlacement() {
       return b;
     }),
   );
+
+  if (focusKey) {
+    for (const b of [...els.ladderSlots.children, ...els.ladderRoster.children]) {
+      if (b instanceof HTMLButtonElement && b.dataset.key === focusKey && !b.disabled) b.focus();
+    }
+  }
 }
 
 /** Chip picked → place it here; no chip picked → clear this slot. */
