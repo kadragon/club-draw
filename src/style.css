@@ -646,6 +646,41 @@ body {
   margin: 0;
   text-align: center;
 }
+/* ── Ladder ─────────────────────────────────────────────────────────── */
+.ladder-wrap {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+/* `display: flex` above outranks the UA `[hidden]` rule. */
+.ladder-wrap[hidden] {
+  display: none;
+}
+.ladder {
+  width: min(100%, 1100px);
+  height: min(56vh, 620px);
+  display: block;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+}
+.ladder-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.ladder-actions .btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+body.ladder-on .wheel-wrap {
+  display: none;
+}
+
 .center-actions {
   display: flex;
   gap: 10px;
@@ -1007,6 +1042,15 @@ body.stage-mode .wheel-wrap {
    both modes — keyboard/SR users can always reach it. In setup aria-disabled="true"
    gates the click handler so the draw can't begin before presenting. Stage mode
    scales it up and lifts the gate once a prize + candidates are available. */
+/* Height-bound like the wheel so title, ladder and controls fit one screen. */
+body.stage-mode .ladder {
+  width: min(96vw, 1600px);
+  height: min(52vh, 820px);
+}
+body.stage-mode .ladder-actions .btn {
+  font-size: clamp(15px, 1.4vw, 20px);
+  padding: 12px 24px;
+}
 body.stage-mode .spin-btn {
   width: clamp(120px, 11vw, 168px);
   height: clamp(120px, 11vw, 168px);

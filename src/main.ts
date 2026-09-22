@@ -23,6 +23,16 @@ import {
   type WinnerResult,
   wedgeAtPointer,
 } from "./draw.js";
+import {
+  generateRungs,
+  LADDER_MAX_COLS,
+  LADDER_ROWS,
+  type Ladder,
+  shuffle,
+  shuffleSlots,
+  traceLadder,
+} from "./ladder.js";
+import { createLadderView, type LadderViewModel } from "./ladder-view.js";
 import { createMotionPreference } from "./motion.js";
 import { drawQr } from "./qr.js";
 import {
@@ -46,13 +56,14 @@ import {
   loadState,
   makeParticipant,
   makePrize,
+  recordWin,
   resetSessionState,
   SPIN_MS_MAX,
   SPIN_MS_MIN,
   saveState,
   setParticipantWins,
 } from "./state.js";
-import type { DrawMode, PicksMap, Prize } from "./types.js";
+import type { DrawMethod, DrawMode, Participant, PicksMap, Prize } from "./types.js";
 import { renderParticipantList, renderPrizeList, renderRecordList } from "./ui.js";
 import { createWheel, getTailTime } from "./wheel.js";
 
@@ -62,6 +73,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getEl
 
 const state: AppState = loadState();
 const wheel = createWheel($("wheel") as HTMLCanvasElement);
+const ladderView = createLadderView($("ladder") as HTMLCanvasElement);
 
 // ── Element refs ──────────────────────────────────────────────────────────
 const els = {
@@ -78,6 +90,12 @@ const els = {
   sSpin: $("s-spin") as HTMLInputElement,
   sSound: $("s-sound") as HTMLInputElement,
   sMode: $("s-mode") as HTMLSelectElement,
+  sMethod: $("s-method") as HTMLSelectElement,
+  sMethodLadder: $("s-method-ladder") as HTMLOptionElement,
+  ladderWrap: $("ladder-wrap"),
+  ladderNew: $("ladder-new") as HTMLButtonElement,
+  ladderLock: $("ladder-lock") as HTMLButtonElement,
+  ladderReveal: $("ladder-reveal") as HTMLButtonElement,
   currentPrize: $("current-prize"),
   progress: $("progress"),
   modeBadge: $("mode-badge"),
@@ -227,7 +245,7 @@ function rebuildWheel() {
  */
 let isRevealing = false;
 function spinLocked(): boolean {
-  return wheel.isSpinning() || isRevealing;
+  return wheel.isSpinning() || isRevealing || ladderInFlight();
 }
 
 const motion = createMotionPreference();
@@ -245,6 +263,7 @@ function refreshIdle() {
   const allowed =
     els.overlay.hidden &&
     !spinLocked() &&
+    !ladderActive() &&
     currentPrize() !== null &&
     poolFor(currentPrize()).candidates.length > 0 &&
     !motion.reduced();
@@ -346,6 +365,15 @@ function syncControls() {
   els.sSpin.value = String(state.settings.spinMs / 1000);
   els.sSound.checked = state.settings.sound;
   els.sMode.value = state.settings.mode;
+  els.sMethod.value = activeMethod();
+  // Preference pools differ per prize; one ladder cannot express that.
+  els.sMethodLadder.disabled = state.settings.mode === "preference";
+  document.body.classList.toggle("ladder-on", ladderActive());
+  els.ladderWrap.hidden = !ladderActive();
+  if (ladderActive()) {
+    syncLadderControls();
+    return;
+  }
 
   const cur = currentPrize();
   const pool = poolFor(cur);
@@ -413,6 +441,192 @@ function renderAll() {
   syncControls();
   rebuildWheel();
   renderSession();
+}
+
+// ── Ladder (사다리) ─────────────────────────────────────────────────────────
+// Fairness comes from the bottom-slot shuffle at lock time, not from the ladder's
+// shape (see ladder.ts). Before lock the bottom is covered and empty; after lock
+// neither placement nor rungs can change. The ladder itself is in-memory only:
+// each reveal is applied to `state` immediately, so a reload keeps revealed results
+// and drops the unrevealed remainder back to undrawn.
+
+interface LadderRun {
+  ladder: Ladder;
+  /** Column → player. */
+  players: Participant[];
+  /** Prizes riding this ladder: the leading min(M, N) undrawn ones, list order. */
+  prizes: Prize[];
+  /** Bottom column → prize id (null = 꽝). Null until lock — this is the draw. */
+  slots: (string | null)[] | null;
+  /** Per start column: has this player's result been revealed and applied? */
+  revealed: boolean[];
+  /** Inputs the run was built from; an unlocked run rebuilds when they change. */
+  signature: string;
+}
+
+let ladderRun: LadderRun | null = null;
+
+/** The method in effect: preference mode always runs the wheel, whatever is stored. */
+function activeMethod(): DrawMethod {
+  return state.settings.mode === "preference" ? "wheel" : state.settings.method;
+}
+const ladderActive = (): boolean => activeMethod() === "ladder";
+
+const ladderDone = (run: LadderRun): boolean => run.slots !== null && run.revealed.every(Boolean);
+
+/** Locked with results still hidden: roster/prize edits would orphan the draw. */
+function ladderInFlight(): boolean {
+  return ladderRun !== null && ladderRun.slots !== null && !ladderDone(ladderRun);
+}
+
+function ladderInputs(): { players: Participant[]; prizes: Prize[]; signature: string } {
+  const players = candidatesFrom(state.participants);
+  const prizes = state.prizes.filter((z) => !z.drawn).slice(0, players.length);
+  const signature = `${players.map((p) => `${p.id}:${p.name}`).join(",")}|${prizes
+    .map((z) => `${z.id}:${z.name}`)
+    .join(",")}`;
+  return { players, prizes, signature };
+}
+
+function buildLadderRun(): LadderRun | null {
+  const { players, prizes, signature } = ladderInputs();
+  if (players.length === 0 || prizes.length === 0 || players.length > LADDER_MAX_COLS) return null;
+  const cols = players.length;
+  return {
+    ladder: generateRungs(cols, LADDER_ROWS, "normal"),
+    players: shuffle(players),
+    prizes,
+    slots: null,
+    revealed: players.map(() => false),
+    signature,
+  };
+}
+
+/**
+ * Keep the run in step with the roster. A locked or finished run is left alone (a
+ * finished one stays on screen until "새 사다리"); an unlocked one is rebuilt when
+ * the players or pending prizes change.
+ */
+function syncLadderRun() {
+  if (!ladderActive()) {
+    if (!ladderInFlight()) ladderRun = null;
+    return;
+  }
+  if (ladderRun && ladderRun.slots !== null) return;
+  if (!ladderRun || ladderRun.signature !== ladderInputs().signature) ladderRun = buildLadderRun();
+}
+
+/** Palette slot keyed to roster position (by id — run.players may be stale objects). */
+const colorFor = (id: string): number =>
+  Math.max(
+    0,
+    state.participants.findIndex((x) => x.id === id),
+  );
+
+function ladderModel(run: LadderRun): LadderViewModel {
+  const prizeName = new Map(run.prizes.map((z) => [z.id, z.name]));
+  const ends = run.players.map((_, c) => traceLadder(run.ladder, c));
+  const reached = new Set(ends.filter((_, c) => run.revealed[c]).map((t) => t.endCol));
+  return {
+    ladder: run.ladder,
+    top: run.players.map((p) => ({ name: p.name, color: colorFor(p.id) })),
+    bottom: run.players.map((_, c) => {
+      const id = run.slots?.[c] ?? null;
+      return { covered: !reached.has(c), prize: id === null ? null : (prizeName.get(id) ?? null) };
+    }),
+    paths: ends
+      .map((t, c) => ({ points: t.path, color: colorFor(run.players[c]!.id) }))
+      .filter((_, c) => run.revealed[c]),
+  };
+}
+
+function renderLadder() {
+  ladderView.setModel(ladderRun ? ladderModel(ladderRun) : null);
+}
+
+/** Header, buttons and status for the ladder; the wheel's START gate does not apply. */
+function syncLadderControls() {
+  syncLadderRun();
+  renderLadder();
+  els.modeBadge.hidden = true;
+  const run = ladderRun;
+  const inStage = document.body.classList.contains("stage-mode");
+  const { players, prizes } = ladderInputs();
+  const tooMany = !run && players.length > LADDER_MAX_COLS;
+
+  if (run && ladderDone(run)) {
+    const wins = run.slots!.filter((id) => id !== null).length;
+    els.currentPrize.textContent = "사다리 결과";
+    els.progress.textContent = `당첨 ${wins}명 · 꽝 ${run.players.length - wins}명`;
+  } else if (run) {
+    const blanks = run.players.length - run.prizes.length;
+    els.currentPrize.textContent = "사다리 추첨";
+    els.progress.textContent = `참가자 ${run.players.length}명 · 상품 ${run.prizes.length}개${blanks ? ` · 꽝 ${blanks}칸` : ""}`;
+  } else {
+    els.currentPrize.textContent =
+      prizes.length === 0 && state.prizes.length > 0 ? "추첨 완료 🎉" : "사다리 추첨";
+    els.progress.textContent = "";
+  }
+
+  const locked = !!run && run.slots !== null;
+  const canLock = inStage && !!run && !locked;
+  const canReveal = inStage && !!run && locked && !ladderDone(run);
+  els.ladderLock.setAttribute("aria-disabled", canLock ? "false" : "true");
+  els.ladderReveal.setAttribute("aria-disabled", canReveal ? "false" : "true");
+  els.ladderNew.disabled = ladderInFlight();
+  const stageHint = inStage ? "" : "발표 모드에서 진행할 수 있습니다";
+  els.ladderLock.title = stageHint;
+  els.ladderReveal.title = stageHint;
+
+  if (tooMany) els.status.textContent = `사다리는 최대 ${LADDER_MAX_COLS}명까지 탈 수 있습니다.`;
+  else if (players.length === 0) els.status.textContent = "남은 참가자가 없습니다.";
+  else if (!run && prizes.length === 0) els.status.textContent = "남은 상품이 없습니다.";
+  else if (run && !locked)
+    els.status.textContent = "시작을 누르면 사다리가 잠기고 결과가 정해집니다.";
+  else if (run && !ladderDone(run)) els.status.textContent = "결과가 정해졌습니다. 공개하세요.";
+  else els.status.textContent = "";
+}
+
+function newLadder() {
+  if (!ladderActive() || ladderInFlight()) return;
+  ladderRun = buildLadderRun();
+  syncControls();
+}
+
+/** Lock placement and rungs, then draw the bottom slots — the only random step that decides. */
+function lockLadder() {
+  unlockAudio();
+  const run = ladderRun;
+  if (els.ladderLock.getAttribute("aria-disabled") === "true" || !run || run.slots) return;
+  run.slots = shuffleSlots(
+    run.prizes.map((z) => z.id),
+    run.players.length,
+  );
+  syncControls();
+}
+
+/** Reveal every remaining player at once, applying each win to the session. */
+function revealLadder() {
+  unlockAudio();
+  const run = ladderRun;
+  if (els.ladderReveal.getAttribute("aria-disabled") === "true" || !run || !run.slots) return;
+  const at = new Date().toISOString();
+  let won = 0;
+  run.players.forEach((player, c) => {
+    if (run.revealed[c]) return;
+    run.revealed[c] = true;
+    const prizeId = run.slots![traceLadder(run.ladder, c).endCol];
+    if (prizeId && recordWin(state, player.id, prizeId, at)) won++;
+  });
+  persist();
+  if (won > 0) {
+    if (state.settings.sound) playFanfare();
+    if (!motion.reduced()) fireConfetti();
+  }
+  renderParticipants();
+  renderPrizes();
+  renderRecords();
+  syncControls();
 }
 
 // ── Preference session (network only here; the draw stays offline) ─────────
@@ -488,7 +702,7 @@ let lastResult: WinnerResult | null = null;
 
 function spin() {
   unlockAudio();
-  if (els.spinBtn.getAttribute("aria-disabled") === "true") return;
+  if (ladderActive() || els.spinBtn.getAttribute("aria-disabled") === "true") return;
   const prize = currentPrize();
   if (!prize || wheel.isSpinning()) return;
 
@@ -569,15 +783,8 @@ function onWin(winnerId: string, prizeId: string) {
   const prize = state.prizes.find((p) => p.id === prizeId);
   if (!winner || !prize) return;
 
-  winner.excluded = true; // session removal; cumulativeWins stays historical
-  prize.drawn = true;
-  prize.winnerId = winner.id;
-  state.records.push({
-    prize: prize.name,
-    winner: winner.name,
-    winnerId: winner.id,
-    at: new Date().toISOString(),
-  });
+  // Session removal; cumulativeWins stays historical (recordWin never touches it).
+  recordWin(state, winnerId, prizeId, new Date().toISOString());
   persist();
 
   if (state.settings.sound) playFanfare();
@@ -719,6 +926,21 @@ els.sMode.addEventListener("change", () => {
   renderAll();
 });
 
+els.sMethod.addEventListener("change", () => {
+  if (spinLocked()) {
+    els.sMethod.value = activeMethod();
+    return;
+  }
+  state.settings.method = els.sMethod.value === "ladder" ? "ladder" : "wheel";
+  persist();
+  renderAll();
+  // The ladder canvas sizes from its CSS box, which only exists once it is shown.
+  requestAnimationFrame(renderLadder);
+});
+els.ladderNew.addEventListener("click", newLadder);
+els.ladderLock.addEventListener("click", lockLadder);
+els.ladderReveal.addEventListener("click", revealLadder);
+
 els.sessionOpen.addEventListener("click", () => {
   if (spinLocked()) return;
   const built = buildSessionPayload(state.participants, state.prizes);
@@ -819,6 +1041,7 @@ function enterStage() {
   // then redraw so the wheel fills the stage.
   requestAnimationFrame(() => {
     wheel.render();
+    ladderView.render();
     refreshIdle();
   });
 }
@@ -904,6 +1127,7 @@ els.resetSession.addEventListener("click", async () => {
   )
     return;
   resetSessionState(state);
+  ladderRun = null;
   els.overlay.hidden = true;
   wheel.setHighlight(null); // drop any lingering reveal spotlight before rebuilding
   closeResult(); // result modal may hold now-stale roster/records
@@ -941,6 +1165,7 @@ async function applyRestore(token: string) {
   )
     return;
   applyBackupData(state, data);
+  ladderRun = null;
   els.overlay.hidden = true;
   wheel.setHighlight(null);
   closeResult();
@@ -963,7 +1188,10 @@ els.restoreFile.addEventListener("change", () => {
   els.restoreFile.value = "";
 });
 
-window.addEventListener("resize", () => wheel.render());
+window.addEventListener("resize", () => {
+  wheel.render();
+  ladderView.render();
+});
 
 // Toggling the OS setting mid-session must start/stop the drift without a reload.
 motion.subscribe(refreshIdle);
@@ -980,6 +1208,13 @@ if (import.meta.env.DEV) {
     // Preference seed that bypasses the session API, for browser checks without a Worker.
     setPicks: (picks: PicksMap) => {
       state.picks = picks;
+      persist();
+      renderAll();
+    },
+    ladder: () => ladderRun,
+    traceLadder,
+    setMethod: (method: DrawMethod) => {
+      state.settings.method = method;
       persist();
       renderAll();
     },

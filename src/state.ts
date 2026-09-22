@@ -1,4 +1,5 @@
 import type {
+  DrawMethod,
   DrawMode,
   DrawRecord,
   Participant,
@@ -29,7 +30,12 @@ const KEY = "club-draw:v1";
 export const SPIN_MS_MIN = 1000;
 export const SPIN_MS_MAX = 20000;
 
-export const DEFAULT_SETTINGS: Settings = { spinMs: 5000, sound: true, mode: "all" };
+export const DEFAULT_SETTINGS: Settings = {
+  spinMs: 5000,
+  sound: true,
+  mode: "all",
+  method: "wheel",
+};
 
 /** Clamp an arbitrary spin duration (ms) into the supported range. NaN → default. */
 export function clampSpinMs(ms: number): number {
@@ -78,6 +84,11 @@ export function defaultState(): AppState {
 /** Coerce a persisted mode string; anything unrecognized degrades to the original behaviour. */
 function readMode(v: unknown): DrawMode {
   return v === "preference" ? "preference" : "all";
+}
+
+/** Coerce a persisted draw method; anything unrecognized degrades to the wheel. */
+function readMethod(v: unknown): DrawMethod {
+  return v === "ladder" ? "ladder" : "wheel";
 }
 
 /**
@@ -155,6 +166,7 @@ export function loadState(): AppState {
       spinMs: clampSpinMs(Number((data.settings as Settings)?.spinMs)),
       sound: (data.settings as Settings)?.sound ?? DEFAULT_SETTINGS.sound,
       mode: readMode((data.settings as Settings)?.mode),
+      method: readMethod((data.settings as Settings)?.method),
     };
     const records = Array.isArray(data.records)
       ? (data.records as unknown[]).filter(isObj).map((r) => ({
@@ -245,6 +257,24 @@ export function applyBackupData(
   state.records = [];
   state.picks = {};
   state.session = null;
+}
+
+/**
+ * Apply one resolved draw in place: the winner leaves the pool (`excluded`), the prize
+ * is marked drawn with its back-reference, and a record is appended. Shared by the
+ * wheel and the ladder so both leave the same audit trail. `cumulativeWins` is never
+ * touched — carry-over is operator-entered history. Returns false (and changes
+ * nothing) when either id is unknown.
+ */
+export function recordWin(state: AppState, winnerId: string, prizeId: string, at: string): boolean {
+  const winner = state.participants.find((p) => p.id === winnerId);
+  const prize = state.prizes.find((p) => p.id === prizeId);
+  if (!winner || !prize) return false;
+  winner.excluded = true;
+  prize.drawn = true;
+  prize.winnerId = winner.id;
+  state.records.push({ prize: prize.name, winner: winner.name, winnerId: winner.id, at });
+  return true;
 }
 
 export function makeParticipant(name: string, cumulativeWins = 0): Participant {
