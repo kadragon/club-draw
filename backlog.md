@@ -5,6 +5,6 @@
 
 ## Review Backlog
 
-### PR #57 — ladder keyboard rung editing, density confirm, cached traces (2026-09-23)
+### PR #58 — ladderModel: index players and roster colors once per frame (2026-09-23)
 
-- [ ] [debt] `ladderModel`이 애니메이션 프레임마다 열별 `playerAt`(find)·`colorFor`(findIndex)로 O(N²) 선형 탐색 — run 단위로 id→player/color 맵을 한 번 만들어 재사용 (source: code-review) — `src/main.ts` `ladderModel`
+- [ ] [debt] `ladderModel`이 경로 애니메이션 중 매 프레임 top/bottom 등 정적 부분까지 재구성 — 정적 부분은 run/상태 변경 시 1회, 프레임마다 `paths[].progress`만 갱신 (stale 위험 주의: placement·roster 변동) (source: code-review) — `src/main.ts` `ladderModel`

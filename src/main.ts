@@ -561,28 +561,43 @@ function syncLadderRun() {
   }
 }
 
-const playerAt = (run: LadderRun, col: number): Participant | undefined =>
-  run.players.find((p) => p.id === run.placement[col]);
+const playersById = (run: LadderRun): Map<string, Participant> =>
+  new Map(run.players.map((p) => [p.id, p]));
+
+/** Pass `byId` when looking up many columns (e.g. every animation frame). */
+const playerAt = (
+  run: LadderRun,
+  col: number,
+  byId = playersById(run),
+): Participant | undefined => {
+  const id = run.placement[col];
+  return id == null ? undefined : byId.get(id);
+};
 
 const ladderPlaced = (run: LadderRun): boolean => run.placement.every((id) => id !== null);
 
-/** Palette slot keyed to roster position (by id — run.players may be stale objects). */
-const colorFor = (id: string): number =>
-  Math.max(
-    0,
-    state.participants.findIndex((x) => x.id === id),
-  );
+const rosterIndex = (): Map<string, number> => new Map(state.participants.map((x, i) => [x.id, i]));
+
+/**
+ * Palette slot keyed to roster position (by id — run.players may be stale objects).
+ * Pass `index` when coloring many ids (e.g. every animation frame).
+ */
+const colorFor = (id: string | null | undefined, index = rosterIndex()): number =>
+  (id == null ? undefined : index.get(id)) ?? 0;
 
 function ladderModel(run: LadderRun): LadderViewModel {
   const prizeName = new Map(run.prizes.map((z) => [z.id, z.name]));
+  // Runs every animation frame: index once instead of a linear scan per column.
+  const byId = playersById(run);
+  const roster = rosterIndex();
   // Pre-lock nothing is revealed or animating, so there is no path to draw.
   const ends = run.traces ?? [];
   const reached = new Set(ends.filter((_, c) => run.revealed[c]).map((t) => t.endCol));
   return {
     ladder: run.ladder,
     top: run.players.map((_, c) => {
-      const p = playerAt(run, c);
-      return p ? { name: p.name, color: colorFor(p.id) } : null;
+      const p = playerAt(run, c, byId);
+      return p ? { name: p.name, color: colorFor(p.id, roster) } : null;
     }),
     bottom: run.players.map((_, c) => {
       const id = run.slots?.[c] ?? null;
@@ -591,7 +606,7 @@ function ladderModel(run: LadderRun): LadderViewModel {
     paths: ends
       .map((t, c) => ({
         points: t.path,
-        color: colorFor(run.placement[c] ?? ""),
+        color: colorFor(run.placement[c], roster),
         progress: run.revealed[c] ? 1 : ladderAnim?.col === c ? ladderAnim.t : 0,
       }))
       .filter((p) => p.progress > 0),
