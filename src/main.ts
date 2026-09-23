@@ -565,7 +565,7 @@ function syncLadderRun() {
 const playersById = (run: LadderRun): Map<string, Participant> =>
   new Map(run.players.map((p) => [p.id, p]));
 
-/** Pass `byId` when looking up many columns (e.g. every animation frame). */
+/** Pass `byId` when looking up many columns (e.g. building the whole view model). */
 const playerAt = (
   run: LadderRun,
   col: number,
@@ -581,19 +581,22 @@ const rosterIndex = (): Map<string, number> => new Map(state.participants.map((x
 
 /**
  * Palette slot keyed to roster position (by id — run.players may be stale objects).
- * Pass `index` when coloring many ids (e.g. every animation frame).
+ * Pass `index` when coloring many ids (e.g. building the whole view model).
  */
 const colorFor = (id: string | null | undefined, index = rosterIndex()): number =>
   (id == null ? undefined : index.get(id)) ?? 0;
 
 /**
- * Everything but path progress: posts, labels, and each traced path's points and
- * color. Rebuilt on every full canvas render; animation frames reuse it.
+ * The view model minus the path being animated: labels, revealed paths, and each
+ * path's points and color keyed by column. Rebuilt on every full canvas render;
+ * animation frames reuse it. Invariant: anything that mutates the run or roster
+ * ends in `syncControls`/`renderLadderCanvas` — the `run` identity check below only
+ * catches a replaced run, not an in-place edit.
  */
 interface LadderFrameBase {
   run: LadderRun;
-  model: Omit<LadderViewModel, "paths">;
-  paths: { col: number; points: LadderPath["points"]; color: number }[];
+  model: LadderViewModel;
+  pathAt: readonly LadderPath[];
 }
 
 let ladderBase: LadderFrameBase | null = null;
@@ -605,6 +608,10 @@ function ladderFrameBase(run: LadderRun): LadderFrameBase {
   // Pre-lock nothing is revealed or animating, so there is no path to draw.
   const ends = run.traces ?? [];
   const reached = new Set(ends.filter((_, c) => run.revealed[c]).map((t) => t.endCol));
+  const pathAt = ends.map((t, c) => ({
+    points: t.path,
+    color: colorFor(run.placement[c], roster),
+  }));
   return {
     run,
     model: {
@@ -620,31 +627,21 @@ function ladderFrameBase(run: LadderRun): LadderFrameBase {
           prize: id === null ? null : (prizeName.get(id) ?? null),
         };
       }),
+      paths: pathAt.filter((_, c) => run.revealed[c]).map((p) => ({ ...p, progress: 1 })),
       cursor:
         ladderCursorShown && run.slots === null && run.ladder.cols > 1
           ? moveRungCursor(ladderCursor, 0, 0, run.ladder.cols, run.ladder.rows)
           : null,
     },
-    paths: ends.map((t, c) => ({
-      col: c,
-      points: t.path,
-      color: colorFor(run.placement[c], roster),
-    })),
+    pathAt,
   };
 }
 
-function ladderModel(base: LadderFrameBase): LadderViewModel {
-  const { run } = base;
-  return {
-    ...base.model,
-    paths: base.paths
-      .map(({ col, points, color }) => ({
-        points,
-        color,
-        progress: run.revealed[col] ? 1 : ladderAnim?.col === col ? ladderAnim.t : 0,
-      }))
-      .filter((p) => p.progress > 0),
-  };
+/** The base plus the path in flight, if any. */
+function ladderModel({ model, pathAt }: LadderFrameBase): LadderViewModel {
+  const anim = ladderAnim;
+  const moving = anim && anim.t > 0 ? pathAt[anim.col] : undefined;
+  return moving ? { ...model, paths: [...model.paths, { ...moving, progress: anim!.t }] } : model;
 }
 
 function renderLadderCanvas() {
@@ -652,7 +649,7 @@ function renderLadderCanvas() {
   ladderView.setModel(ladderBase && ladderModel(ladderBase));
 }
 
-/** Animation frame: only path progress moves, so reuse the base unless the run changed. */
+/** Animation frame: only the moving path changes, so reuse the base unless the run was replaced. */
 function renderLadderFrame() {
   if (!ladderBase || ladderBase.run !== ladderRun) renderLadderCanvas();
   else ladderView.setModel(ladderModel(ladderBase));
