@@ -103,6 +103,8 @@ export interface Point {
  */
 export function polylinePrefix(pts: readonly Point[], t: number): Point[] {
   if (pts.length === 0) return [];
+  // Exact end, not a float-accumulated near miss: the pen must stop on the drawn slot.
+  if (t >= 1) return [...pts];
   const seg = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i]!.x, p.y - pts[i]!.y));
   let left = Math.max(0, Math.min(1, t)) * seg.reduce((a, b) => a + b, 0);
   const out: Point[] = [pts[0]!];
