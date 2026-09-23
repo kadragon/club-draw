@@ -42,6 +42,7 @@ import {
 } from "./ladder.js";
 import {
   createLadderView,
+  type LadderPath,
   type LadderViewModel,
   ladderLayout,
   moveRungCursor,
@@ -585,40 +586,76 @@ const rosterIndex = (): Map<string, number> => new Map(state.participants.map((x
 const colorFor = (id: string | null | undefined, index = rosterIndex()): number =>
   (id == null ? undefined : index.get(id)) ?? 0;
 
-function ladderModel(run: LadderRun): LadderViewModel {
+/**
+ * Everything but path progress: posts, labels, and each traced path's points and
+ * color. Rebuilt on every full canvas render; animation frames reuse it.
+ */
+interface LadderFrameBase {
+  run: LadderRun;
+  model: Omit<LadderViewModel, "paths">;
+  paths: { col: number; points: LadderPath["points"]; color: number }[];
+}
+
+let ladderBase: LadderFrameBase | null = null;
+
+function ladderFrameBase(run: LadderRun): LadderFrameBase {
   const prizeName = new Map(run.prizes.map((z) => [z.id, z.name]));
-  // Runs every animation frame: index once instead of a linear scan per column.
   const byId = playersById(run);
   const roster = rosterIndex();
   // Pre-lock nothing is revealed or animating, so there is no path to draw.
   const ends = run.traces ?? [];
   const reached = new Set(ends.filter((_, c) => run.revealed[c]).map((t) => t.endCol));
   return {
-    ladder: run.ladder,
-    top: run.players.map((_, c) => {
-      const p = playerAt(run, c, byId);
-      return p ? { name: p.name, color: colorFor(p.id, roster) } : null;
-    }),
-    bottom: run.players.map((_, c) => {
-      const id = run.slots?.[c] ?? null;
-      return { covered: !reached.has(c), prize: id === null ? null : (prizeName.get(id) ?? null) };
-    }),
-    paths: ends
-      .map((t, c) => ({
-        points: t.path,
-        color: colorFor(run.placement[c], roster),
-        progress: run.revealed[c] ? 1 : ladderAnim?.col === c ? ladderAnim.t : 0,
+    run,
+    model: {
+      ladder: run.ladder,
+      top: run.players.map((_, c) => {
+        const p = playerAt(run, c, byId);
+        return p ? { name: p.name, color: colorFor(p.id, roster) } : null;
+      }),
+      bottom: run.players.map((_, c) => {
+        const id = run.slots?.[c] ?? null;
+        return {
+          covered: !reached.has(c),
+          prize: id === null ? null : (prizeName.get(id) ?? null),
+        };
+      }),
+      cursor:
+        ladderCursorShown && run.slots === null && run.ladder.cols > 1
+          ? moveRungCursor(ladderCursor, 0, 0, run.ladder.cols, run.ladder.rows)
+          : null,
+    },
+    paths: ends.map((t, c) => ({
+      col: c,
+      points: t.path,
+      color: colorFor(run.placement[c], roster),
+    })),
+  };
+}
+
+function ladderModel(base: LadderFrameBase): LadderViewModel {
+  const { run } = base;
+  return {
+    ...base.model,
+    paths: base.paths
+      .map(({ col, points, color }) => ({
+        points,
+        color,
+        progress: run.revealed[col] ? 1 : ladderAnim?.col === col ? ladderAnim.t : 0,
       }))
       .filter((p) => p.progress > 0),
-    cursor:
-      ladderCursorShown && run.slots === null && run.ladder.cols > 1
-        ? moveRungCursor(ladderCursor, 0, 0, run.ladder.cols, run.ladder.rows)
-        : null,
   };
 }
 
 function renderLadderCanvas() {
-  ladderView.setModel(ladderRun ? ladderModel(ladderRun) : null);
+  ladderBase = ladderRun ? ladderFrameBase(ladderRun) : null;
+  ladderView.setModel(ladderBase && ladderModel(ladderBase));
+}
+
+/** Animation frame: only path progress moves, so reuse the base unless the run changed. */
+function renderLadderFrame() {
+  if (!ladderBase || ladderBase.run !== ladderRun) renderLadderCanvas();
+  else ladderView.setModel(ladderModel(ladderBase));
 }
 
 function renderLadder() {
@@ -949,7 +986,7 @@ function animateLadderPath(col: number, ms: number): Promise<void> {
     const frame = (now: number) => {
       const t = Math.min(1, (now - start) / ms);
       ladderAnim = { col, t };
-      renderLadderCanvas();
+      renderLadderFrame();
       if (t < 1) requestAnimationFrame(frame);
       else {
         ladderAnim = null;
