@@ -725,6 +725,41 @@ body {
   flex-wrap: wrap;
   justify-content: center;
 }
+.ladder-density {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.ladder-density .input {
+  width: auto;
+}
+/* Rungs can be clicked in or out until lock. */
+.ladder.is-editable {
+  cursor: pointer;
+}
+.ladder-result-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.ladder-result-table th,
+.ladder-result-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--hairline);
+  text-align: left;
+}
+.ladder-result-table th {
+  font-size: 13px;
+  color: var(--muted);
+}
+.ladder-result-table td.is-win {
+  font-weight: 700;
+}
+.ladder-result-table td.is-blank {
+  color: var(--muted);
+}
 .ladder-actions .btn[aria-disabled="true"] {
   opacity: 0.45;
   cursor: not-allowed;

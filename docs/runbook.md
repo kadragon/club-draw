@@ -43,6 +43,13 @@ bunx wrangler d1 migrations apply club-draw-db --remote   # `bun run deploy`가 
 5. 세션 초기화·백업 복원은 로컬 `state.session`(운영자 토큰)을 비운다 → 서버 세션이 열려 있거나
    삭제 전이면 **먼저 마감·삭제**하고 초기화할 것(UI는 토큰을 다시 입력받지 못한다 — 잃으면 아래 curl로만 정리한다).
 
+## 사다리 무대 규칙
+
+1. 결과는 **시작(잠금)** 순간 하단 셔플로 정해진다. 잠금 전 재구성·새로고침은 결과를 모르는 상태라 공정성에 영향이 없다.
+2. 잠금 후 **새로고침하지 말 것.** 진행 중 사다리는 메모리에만 있다 — 새로고침하면 공개된 결과만 기록에 남고
+   미공개 칸은 미추첨으로 돌아가 다시 구성·셔플해야 한다. 무대에서 미리 안내한다.
+3. 선호 모드에서는 사다리를 쓸 수 없다(원판으로 동작). 누적 당첨 가중치가 필요하면 원판을 쓴다.
+
 ## 버전
 
 `package.json`의 `version`은 **손대지 말 것**. `.githooks/post-commit`이 커밋 메시지의
@@ -75,6 +82,7 @@ bunx wrangler d1 migrations apply club-draw-db --remote   # `bun run deploy`가 
 | pull 409 `session-open` | 아직 마감 전. 마감 먼저. |
 | 참가자 제출 409 `already-submitted` / 403 `bad-claim` | 다른 기기(또는 저장소 삭제)에서 이미 제출됨 — claim 토큰은 기기별. |
 | `/pick`에 원판 번들이 실림 | `pick.ts`가 `draw`/`wheel`/효과 모듈을 임포트함 → 제거(architecture.md 의존 방향). |
+| 사다리 공개 결과 ≠ 기록 | 결과 경로 깨짐 → `test/ladder.test.ts` 절대값 trace 테스트, 브라우저서 `__cd.ladder()`·`__cd.traceLadder`로 도착 칸 대조. |
 | 스핀 후 당첨자 불일치 | 각도 규약 깨짐 → `test/draw.test.ts` "absolute physical convention" 확인. |
 
 ## _workspace/
