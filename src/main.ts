@@ -27,6 +27,7 @@ import {
   clearAt,
   fillRandom,
   generateRungs,
+  hasRung,
   LADDER_DENSITIES,
   LADDER_MAX_COLS,
   LADDER_ROWS,
@@ -839,7 +840,7 @@ function onLadderCanvasClick(e: MouseEvent) {
 /** Status-line read-out of the keyboard cursor: row, the two posts, rung or not. */
 function announceLadderCursor(run: LadderRun) {
   const { row, col } = ladderCursor;
-  const has = run.ladder.rungs.some((r) => r.row === row && r.col === col);
+  const has = hasRung(run.ladder, row, col);
   els.status.textContent = `${row + 1}번째 줄, ${col + 1}–${col + 2}번 사이: 가로줄 ${has ? "있음" : "없음"}`;
 }
 
@@ -854,20 +855,26 @@ const LADDER_CURSOR_KEYS: Record<string, [number, number]> = {
 function onLadderCanvasKey(e: KeyboardEvent) {
   const run = ladderRun;
   if (!run || run.slots !== null || run.ladder.cols < 2) return;
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
   const step = LADDER_CURSOR_KEYS[e.key];
+  const toggle = e.key === "Enter" || e.key === " ";
+  if (!step && !toggle) return;
+  e.preventDefault();
   const { cols, rows } = run.ladder;
-  // Focus by mouse hides the cursor; the first key brings it up.
+  // Clamp first: the ladder may have shrunk since the cursor last moved.
+  ladderCursor = moveRungCursor(ladderCursor, 0, 0, cols, rows);
+  // Focus by mouse hides the cursor. The first key only brings it up, so a Space
+  // meant to scroll cannot silently undo the rung that was just clicked.
+  const wasShown = ladderCursorShown;
   ladderCursorShown = true;
-  if (step) {
-    e.preventDefault();
-    ladderCursor = moveRungCursor(ladderCursor, step[0], step[1], cols, rows);
-    renderLadderCanvas();
-    announceLadderCursor(run);
-  } else if (e.key === "Enter" || e.key === " ") {
-    e.preventDefault();
-    ladderCursor = moveRungCursor(ladderCursor, 0, 0, cols, rows);
+  if (step) ladderCursor = moveRungCursor(ladderCursor, step[0], step[1], cols, rows);
+  else if (wasShown && !e.repeat) {
+    // Held Enter/Space would flip the rung on every auto-repeat.
     if (toggleLadderRung(run, ladderCursor)) announceLadderCursor(run);
+    return;
   }
+  renderLadderCanvas();
+  announceLadderCursor(run);
 }
 
 function showLadderCursor(shown: boolean) {
