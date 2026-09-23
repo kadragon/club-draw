@@ -109,6 +109,40 @@ export function moveRungCursor(
   return { row: clamp(c.row + dRow, rows - 1), col: clamp(c.col + dCol, cols - 2) };
 }
 
+/** The path being drawn: start column and drawn fraction. */
+export interface LadderAnim {
+  col: number;
+  t: number;
+}
+
+/** What changes between frames on top of the cached static model. */
+export interface LadderOverlay {
+  anim: LadderAnim | null;
+  /** The focused rung cursor, or null when the canvas does not show one. */
+  cursor: Rung | null;
+  /** Locked ladders take no edits, so no cursor is drawn. */
+  locked: boolean;
+}
+
+/**
+ * One animation frame: the static `base` (built once per full render) plus the
+ * overlay — the path in flight (`pathAt[anim.col]` at progress `anim.t`) and,
+ * before lock, the rung cursor clamped to the grid. Never mutates its inputs.
+ */
+export function ladderFrame(
+  base: LadderViewModel,
+  pathAt: readonly LadderPath[],
+  { anim, cursor, locked }: LadderOverlay,
+): LadderViewModel {
+  const moving = anim && anim.t > 0 ? pathAt[anim.col] : undefined;
+  const { cols, rows } = base.ladder;
+  return {
+    ...base,
+    paths: anim && moving ? [...base.paths, { ...moving, progress: anim.t }] : base.paths,
+    cursor: cursor && !locked && cols > 1 ? moveRungCursor(cursor, 0, 0, cols, rows) : null,
+  };
+}
+
 export interface Point {
   x: number;
   y: number;
