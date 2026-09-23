@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  type LadderPath,
+  type LadderViewModel,
   labelRotates,
+  ladderFrame,
   ladderLayout,
   moveRungCursor,
   polylinePrefix,
@@ -116,5 +119,62 @@ describe("moveRungCursor — keyboard rung cursor, clamped to the grid", () => {
 
   it("pulls a stale out-of-grid cursor back inside (ladder shrank)", () => {
     expect(moveRungCursor({ row: 20, col: 9 }, 0, 0, 3, 12)).toEqual({ row: 11, col: 1 });
+  });
+});
+
+describe("ladderFrame — per-frame overlay on the cached static model", () => {
+  // 4 posts → gaps 0..2; 12 rows → rows 0..11.
+  const revealed: LadderPath = { points: [{ col: 0, y: 0 }], color: 0, progress: 1 };
+  const base: LadderViewModel = {
+    ladder: { cols: 4, rows: 12, rungs: [] },
+    top: [null, null, null, null],
+    bottom: [],
+    paths: [revealed],
+  };
+  const pathAt: LadderPath[] = [0, 1, 2, 3].map((c) => ({
+    points: [
+      { col: c, y: 0 },
+      { col: c, y: 13 },
+    ],
+    color: c + 10,
+  }));
+
+  it("no animation, no cursor: the base paths, cursor null", () => {
+    const m = ladderFrame(base, pathAt, null, null);
+    expect(m.paths).toEqual([revealed]);
+    expect(m.cursor).toBeNull();
+    expect(m.ladder).toBe(base.ladder);
+  });
+
+  it("an animation at t = 0 draws nothing yet", () => {
+    expect(ladderFrame(base, pathAt, { col: 2, t: 0 }, null).paths).toEqual([revealed]);
+  });
+
+  it("appends the moving column's path at progress t, after the revealed ones", () => {
+    const m = ladderFrame(base, pathAt, { col: 2, t: 0.25 }, null);
+    expect(m.paths).toEqual([revealed, { ...pathAt[2], progress: 0.25 }]);
+  });
+
+  it("an animation on a column with no path adds nothing", () => {
+    expect(ladderFrame(base, pathAt, { col: 7, t: 0.5 }, null).paths).toEqual([revealed]);
+  });
+
+  it("draws the cursor clamped to the grid (stale cursor after the ladder shrank)", () => {
+    expect(ladderFrame(base, pathAt, null, { row: 3, col: 1 }).cursor).toEqual({ row: 3, col: 1 });
+    expect(ladderFrame(base, pathAt, null, { row: 20, col: 9 }).cursor).toEqual({
+      row: 11,
+      col: 2,
+    });
+  });
+
+  it("a one-post ladder has no gap, so no cursor", () => {
+    const solo = { ...base, ladder: { cols: 1, rows: 12, rungs: [] } };
+    expect(ladderFrame(solo, pathAt, null, { row: 0, col: 0 }).cursor).toBeNull();
+  });
+
+  it("never mutates the cached base or its path table", () => {
+    const before = structuredClone({ base, pathAt });
+    ladderFrame(base, pathAt, { col: 1, t: 0.5 }, { row: 2, col: 2 });
+    expect({ base, pathAt }).toEqual(before);
   });
 });

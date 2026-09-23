@@ -42,8 +42,10 @@ import {
 } from "./ladder.js";
 import {
   createLadderView,
+  type LadderAnim,
   type LadderPath,
   type LadderViewModel,
+  ladderFrame,
   ladderLayout,
   moveRungCursor,
   rungAt,
@@ -501,7 +503,7 @@ let ladderDensity: LadderDensity = "normal";
 /** True while a reveal animation plays; one path at a time, no edits meanwhile. */
 let ladderBusy = false;
 /** The path being drawn: start column and drawn fraction. Render-only, decides nothing. */
-let ladderAnim: { col: number; t: number } | null = null;
+let ladderAnim: LadderAnim | null = null;
 /** Keyboard rung cursor; drawn only while the canvas has focus before lock. */
 let ladderCursor: Rung = { row: 0, col: 0 };
 let ladderCursorShown = false;
@@ -587,9 +589,9 @@ const colorFor = (id: string | null | undefined, index = rosterIndex()): number 
   (id == null ? undefined : index.get(id)) ?? 0;
 
 /**
- * The view model minus the path being animated: labels, revealed paths, and each
- * path's points and color keyed by column. Rebuilt on every full canvas render;
- * animation frames reuse it. Invariant: anything that mutates the run or roster
+ * The view model minus the per-frame overlay (path being animated, rung cursor):
+ * labels, revealed paths, and each path's points and color keyed by column. Rebuilt
+ * on every full canvas render; animation frames and cursor moves reuse it. Invariant: anything that mutates the run or roster
  * ends in `syncControls`/`renderLadderCanvas` — the `run` identity check below only
  * catches a replaced run, not an in-place edit.
  */
@@ -628,20 +630,15 @@ function ladderFrameBase(run: LadderRun): LadderFrameBase {
         };
       }),
       paths: pathAt.filter((_, c) => run.revealed[c]).map((p) => ({ ...p, progress: 1 })),
-      cursor:
-        ladderCursorShown && run.slots === null && run.ladder.cols > 1
-          ? moveRungCursor(ladderCursor, 0, 0, run.ladder.cols, run.ladder.rows)
-          : null,
     },
     pathAt,
   };
 }
 
-/** The base plus the path in flight, if any. */
-function ladderModel({ model, pathAt }: LadderFrameBase): LadderViewModel {
-  const anim = ladderAnim;
-  const moving = anim && anim.t > 0 ? pathAt[anim.col] : undefined;
-  return moving ? { ...model, paths: [...model.paths, { ...moving, progress: anim!.t }] } : model;
+/** The base plus the path in flight and, before lock, the focused rung cursor. */
+function ladderModel({ run, model, pathAt }: LadderFrameBase): LadderViewModel {
+  const cursor = ladderCursorShown && run.slots === null ? ladderCursor : null;
+  return ladderFrame(model, pathAt, ladderAnim, cursor);
 }
 
 function renderLadderCanvas() {
@@ -649,7 +646,10 @@ function renderLadderCanvas() {
   ladderView.setModel(ladderBase && ladderModel(ladderBase));
 }
 
-/** Animation frame: only the moving path changes, so reuse the base unless the run was replaced. */
+/**
+ * Overlay-only change (animation frame, cursor move/focus): reuse the base unless
+ * the run was replaced.
+ */
 function renderLadderFrame() {
   if (!ladderBase || ladderBase.run !== ladderRun) renderLadderCanvas();
   else ladderView.setModel(ladderModel(ladderBase));
@@ -922,13 +922,13 @@ function onLadderCanvasKey(e: KeyboardEvent) {
     if (toggleLadderRung(run, ladderCursor)) announceLadderCursor(run);
     return;
   }
-  renderLadderCanvas();
+  renderLadderFrame();
   announceLadderCursor(run);
 }
 
 function showLadderCursor(shown: boolean) {
   ladderCursorShown = shown;
-  renderLadderCanvas();
+  renderLadderFrame();
   if (shown && ladderRun && ladderRun.slots === null && ladderRun.ladder.cols > 1) {
     ladderCursor = moveRungCursor(ladderCursor, 0, 0, ladderRun.ladder.cols, ladderRun.ladder.rows);
     announceLadderCursor(ladderRun);

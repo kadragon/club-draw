@@ -109,6 +109,32 @@ export function moveRungCursor(
   return { row: clamp(c.row + dRow, rows - 1), col: clamp(c.col + dCol, cols - 2) };
 }
 
+/** The path being drawn: start column and drawn fraction. */
+export interface LadderAnim {
+  col: number;
+  t: number;
+}
+
+/**
+ * One animation frame: the static `base` (built once per full render) plus what
+ * changes between frames — the path in flight (`pathAt[anim.col]` at progress
+ * `anim.t`) and the rung cursor, clamped to the grid. Never mutates its inputs.
+ */
+export function ladderFrame(
+  base: LadderViewModel,
+  pathAt: readonly LadderPath[],
+  anim: LadderAnim | null,
+  cursor: Rung | null,
+): LadderViewModel {
+  const moving = anim && anim.t > 0 ? pathAt[anim.col] : undefined;
+  const { cols, rows } = base.ladder;
+  return {
+    ...base,
+    paths: moving ? [...base.paths, { ...moving, progress: anim!.t }] : base.paths,
+    cursor: cursor && cols > 1 ? moveRungCursor(cursor, 0, 0, cols, rows) : null,
+  };
+}
+
 export interface Point {
   x: number;
   y: number;
