@@ -628,7 +628,7 @@ function renderLadderPlacement() {
       b.disabled = !open && !revealable(c);
       b.dataset.key = `slot:${c}`;
       const p = run ? playerAt(run, c) : undefined;
-      const suffix = open ? "" : run?.revealed[c] ? " — 공개됨" : " — 눌러서 결과 공개";
+      const suffix = run?.revealed[c] ? " — 공개됨" : revealable(c) ? " — 눌러서 결과 공개" : "";
       b.setAttribute("aria-label", `${c + 1}번 칸: ${p ? p.name : "비어 있음"}${suffix}`);
       b.addEventListener("click", () => onLadderSlot(c));
       return b;
@@ -773,7 +773,8 @@ function lockLadder() {
 /** Click on the ladder body: add or remove the rung under the pointer, until lock. */
 function onLadderCanvasClick(e: MouseEvent) {
   const run = ladderRun;
-  if (!run || run.slots !== null) return;
+  // A double-click's second click would undo the first toggle.
+  if (!run || run.slots !== null || e.detail > 1) return;
   const canvas = els.ladderCanvas;
   const hit = rungAt(
     e.offsetX,
@@ -804,10 +805,13 @@ function setLadderDensity(value: string) {
   syncControls();
 }
 
-/** Per-path draw time, from the wheel's spin length: a solo reveal lingers, a batch moves on. */
+/**
+ * Per-path draw time, from the wheel's spin length: a solo reveal lingers, a batch
+ * moves on. Capped so a 20s spin setting cannot stretch 30 paths into minutes.
+ */
 function ladderPathMs(batch: boolean): number {
-  const solo = state.settings.spinMs * 0.5;
-  return batch ? Math.max(400, solo * 0.4) : solo;
+  const solo = Math.min(6000, state.settings.spinMs * 0.5);
+  return batch ? Math.min(1500, Math.max(400, solo * 0.4)) : solo;
 }
 
 /**
@@ -833,15 +837,18 @@ function animateLadderPath(col: number, ms: number): Promise<void> {
   });
 }
 
-/** The path has arrived: uncover its slot and apply a win to the session. */
-function applyLadderReveal(run: LadderRun, col: number) {
+/**
+ * The path has arrived: uncover its slot and apply a win to the session. `celebrate`
+ * false defers the fanfare to the caller (an instant batch would stack them).
+ */
+function applyLadderReveal(run: LadderRun, col: number, celebrate: boolean): boolean {
   run.revealed[col] = true;
   const playerId = run.placement[col];
   const prizeId = run.slots![traceLadder(run.ladder, col).endCol];
   const won =
     !!playerId && !!prizeId && recordWin(state, playerId, prizeId, new Date().toISOString());
   persist();
-  if (won) {
+  if (won && celebrate) {
     if (state.settings.sound) playFanfare();
     if (!motion.reduced()) fireConfetti();
   }
@@ -849,6 +856,7 @@ function applyLadderReveal(run: LadderRun, col: number) {
   renderPrizes();
   renderRecords();
   syncControls();
+  return won;
 }
 
 /** Play `cols` one after another; the table opens when the last path is out. */
@@ -856,6 +864,11 @@ async function playLadderReveals(cols: number[], ms: number) {
   const run = ladderRun;
   if (!run?.slots || ladderBusy) return;
   unlockAudio();
+  // Slot buttons go disabled while busy and focus falls to <body>; hand it back after.
+  const fromSlots = els.ladderSlots.contains(document.activeElement);
+  // Reduced motion resolves every path at once: one fanfare for the batch, not a pile-up.
+  const instant = motion.reduced();
+  let anyWin = false;
   ladderBusy = true;
   syncControls();
   try {
@@ -863,14 +876,21 @@ async function playLadderReveals(cols: number[], ms: number) {
       if (run.revealed[c]) continue;
       await animateLadderPath(c, ms);
       if (ladderRun !== run) return;
-      applyLadderReveal(run, c);
+      if (applyLadderReveal(run, c, !instant)) anyWin = true;
     }
   } finally {
     ladderBusy = false;
     ladderAnim = null;
+    syncControls();
   }
-  syncControls();
+  if (instant && anyWin && state.settings.sound) playFanfare();
   if (ladderDone(run)) openLadderResult(run);
+  else if (fromSlots) {
+    const next = [...els.ladderSlots.children].find(
+      (b): b is HTMLButtonElement => b instanceof HTMLButtonElement && !b.disabled,
+    );
+    (next ?? els.ladderReveal).focus();
+  }
 }
 
 function revealLadderAt(col: number) {
@@ -895,12 +915,12 @@ function revealLadder() {
 function openLadderResult(run: LadderRun) {
   const prizeName = new Map(run.prizes.map((z) => [z.id, z.name]));
   els.ladderResultBody.replaceChildren(
-    ...run.placement.map((playerId, c) => {
+    ...run.placement.map((_, c) => {
       const prizeId = run.slots?.[traceLadder(run.ladder, c).endCol] ?? null;
       const tr = document.createElement("tr");
       const cells = [
         String(c + 1),
-        run.players.find((p) => p.id === playerId)?.name ?? "",
+        playerAt(run, c)?.name ?? "",
         prizeId === null ? "꽝" : (prizeName.get(prizeId) ?? ""),
       ];
       for (const text of cells) {
