@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { labelRotates, ladderLayout, polylinePrefix, rungAt } from "../src/ladder-view.js";
+import {
+  labelRotates,
+  ladderLayout,
+  moveRungCursor,
+  polylinePrefix,
+  rungAt,
+} from "../src/ladder-view.js";
 
 describe("ladderLayout — lane geometry shared by canvas and slot buttons", () => {
   it("wide lanes: horizontal labels in a fixed 52px band", () => {
@@ -86,5 +92,29 @@ describe("polylinePrefix — the drawn part of an animating path", () => {
     expect(polylinePrefix(pts, 0)).toEqual([{ x: 0, y: 0 }]);
     expect(polylinePrefix(pts, 1)).toEqual(pts);
     expect(polylinePrefix(pts, 2)).toEqual(pts);
+  });
+});
+
+describe("moveRungCursor — keyboard rung cursor, clamped to the grid", () => {
+  // 5 posts → gaps 0..3; 12 rows → rows 0..11.
+  const move = (row: number, col: number, dRow: number, dCol: number) =>
+    moveRungCursor({ row, col }, dRow, dCol, 5, 12);
+
+  it("steps one row or one gap", () => {
+    expect(move(3, 1, 1, 0)).toEqual({ row: 4, col: 1 });
+    expect(move(3, 1, -1, 0)).toEqual({ row: 2, col: 1 });
+    expect(move(3, 1, 0, 1)).toEqual({ row: 3, col: 2 });
+    expect(move(3, 1, 0, -1)).toEqual({ row: 3, col: 0 });
+  });
+
+  it("stops at every edge instead of wrapping", () => {
+    expect(move(0, 0, -1, 0)).toEqual({ row: 0, col: 0 });
+    expect(move(0, 0, 0, -1)).toEqual({ row: 0, col: 0 });
+    expect(move(11, 3, 1, 0)).toEqual({ row: 11, col: 3 });
+    expect(move(11, 3, 0, 1)).toEqual({ row: 11, col: 3 });
+  });
+
+  it("pulls a stale out-of-grid cursor back inside (ladder shrank)", () => {
+    expect(moveRungCursor({ row: 20, col: 9 }, 0, 0, 3, 12)).toEqual({ row: 11, col: 1 });
   });
 });

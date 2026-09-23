@@ -27,17 +27,26 @@ import {
   clearAt,
   fillRandom,
   generateRungs,
+  hasRung,
   LADDER_DENSITIES,
   LADDER_MAX_COLS,
   LADDER_ROWS,
   type Ladder,
   type LadderDensity,
   placeAt,
+  type Rung,
   shuffleSlots,
+  type Trace,
   toggleRung,
   traceLadder,
 } from "./ladder.js";
-import { createLadderView, type LadderViewModel, ladderLayout, rungAt } from "./ladder-view.js";
+import {
+  createLadderView,
+  type LadderViewModel,
+  ladderLayout,
+  moveRungCursor,
+  rungAt,
+} from "./ladder-view.js";
 import { createMotionPreference } from "./motion.js";
 import { drawQr } from "./qr.js";
 import {
@@ -473,6 +482,10 @@ interface LadderRun {
   prizes: Prize[];
   /** Bottom column → prize id (null = 꽝). Null until lock — this is the draw. */
   slots: (string | null)[] | null;
+  /** Start column → traced path, computed once at lock (the ladder is frozen then). */
+  traces: Trace[] | null;
+  /** Rungs hand-edited since the last generation; a density change must confirm first. */
+  edited: boolean;
   /** Per start column: has this player's result been revealed and applied? */
   revealed: boolean[];
   /** Inputs the run was built from; an unlocked run rebuilds when they change. */
@@ -488,6 +501,9 @@ let ladderDensity: LadderDensity = "normal";
 let ladderBusy = false;
 /** The path being drawn: start column and drawn fraction. Render-only, decides nothing. */
 let ladderAnim: { col: number; t: number } | null = null;
+/** Keyboard rung cursor; drawn only while the canvas has focus before lock. */
+let ladderCursor: Rung = { row: 0, col: 0 };
+let ladderCursorShown = false;
 
 /** The method in effect: preference mode always runs the wheel, whatever is stored. */
 function activeMethod(): DrawMethod {
@@ -521,6 +537,8 @@ function buildLadderRun(): LadderRun | null {
     placement: players.map(() => null),
     prizes,
     slots: null,
+    traces: null,
+    edited: false,
     revealed: players.map(() => false),
     signature,
   };
@@ -557,7 +575,8 @@ const colorFor = (id: string): number =>
 
 function ladderModel(run: LadderRun): LadderViewModel {
   const prizeName = new Map(run.prizes.map((z) => [z.id, z.name]));
-  const ends = run.players.map((_, c) => traceLadder(run.ladder, c));
+  // Pre-lock nothing is revealed or animating, so there is no path to draw.
+  const ends = run.traces ?? [];
   const reached = new Set(ends.filter((_, c) => run.revealed[c]).map((t) => t.endCol));
   return {
     ladder: run.ladder,
@@ -576,6 +595,10 @@ function ladderModel(run: LadderRun): LadderViewModel {
         progress: run.revealed[c] ? 1 : ladderAnim?.col === c ? ladderAnim.t : 0,
       }))
       .filter((p) => p.progress > 0),
+    cursor:
+      ladderCursorShown && run.slots === null && run.ladder.cols > 1
+        ? moveRungCursor(ladderCursor, 0, 0, run.ladder.cols, run.ladder.rows)
+        : null,
   };
 }
 
@@ -611,6 +634,16 @@ function renderLadderPlacement() {
     document.body.classList.contains("stage-mode");
   const canvas = els.ladderCanvas;
   canvas.classList.toggle("is-editable", open);
+  // Rung editing by keyboard: focusable (and keys passed through to us) only until lock.
+  const keyEditable = open && run.ladder.cols > 1;
+  canvas.tabIndex = keyEditable ? 0 : -1;
+  canvas.setAttribute("role", keyEditable ? "application" : "img");
+  canvas.setAttribute(
+    "aria-label",
+    keyEditable
+      ? "사다리 가로줄 편집: 방향키로 이동, Enter 또는 Space로 가로줄 넣기·빼기"
+      : "사다리",
+  );
   const { band } = ladderLayout(
     canvas.clientWidth || 640,
     canvas.clientHeight || 480,
@@ -747,9 +780,10 @@ function syncLadderControls() {
 function newLadder() {
   if (!ladderActive() || ladderInFlight()) return;
   const run = ladderRun;
-  if (run && run.slots === null)
+  if (run && run.slots === null) {
     run.ladder = generateRungs(run.players.length, LADDER_ROWS, ladderDensity);
-  else {
+    run.edited = false;
+  } else {
     ladderRun = buildLadderRun();
     ladderPick = null;
   }
@@ -767,7 +801,21 @@ function lockLadder() {
     run.prizes.map((z) => z.id),
     run.players.length,
   );
+  run.traces = run.players.map((_, c) => traceLadder(run.ladder, c));
   syncControls();
+}
+
+/** Add or remove the rung at `at` on an unlocked run. False when the add is illegal. */
+function toggleLadderRung(run: LadderRun, at: Rung): boolean {
+  const next = toggleRung(run.ladder, at);
+  const legal = next !== run.ladder;
+  if (legal) {
+    run.ladder = next;
+    run.edited = true;
+  }
+  syncControls();
+  if (!legal) els.status.textContent = "옆 가로줄과 같은 높이에는 놓을 수 없습니다.";
+  return legal;
 }
 
 /** Click on the ladder body: add or remove the rung under the pointer, until lock. */
@@ -785,23 +833,83 @@ function onLadderCanvasClick(e: MouseEvent) {
     run.ladder.rows,
   );
   if (!hit) return;
-  const next = toggleRung(run.ladder, hit);
-  if (next === run.ladder) {
-    syncControls();
-    els.status.textContent = "옆 가로줄과 같은 높이에는 놓을 수 없습니다.";
-    return;
-  }
-  run.ladder = next;
-  syncControls();
+  ladderCursor = hit;
+  toggleLadderRung(run, hit);
 }
 
-function setLadderDensity(value: string) {
-  ladderDensity = (LADDER_DENSITIES as readonly string[]).includes(value)
+/** Status-line read-out of the keyboard cursor: row, the two posts, rung or not. */
+function announceLadderCursor(run: LadderRun) {
+  const { row, col } = ladderCursor;
+  const has = hasRung(run.ladder, row, col);
+  els.status.textContent = `${row + 1}번째 줄, ${col + 1}–${col + 2}번 사이: 가로줄 ${has ? "있음" : "없음"}`;
+}
+
+const LADDER_CURSOR_KEYS: Record<string, [number, number]> = {
+  ArrowUp: [-1, 0],
+  ArrowDown: [1, 0],
+  ArrowLeft: [0, -1],
+  ArrowRight: [0, 1],
+};
+
+/** Keyboard rung editing: arrows move the cursor, Enter/Space toggles, until lock. */
+function onLadderCanvasKey(e: KeyboardEvent) {
+  const run = ladderRun;
+  if (!run || run.slots !== null || run.ladder.cols < 2) return;
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
+  const step = LADDER_CURSOR_KEYS[e.key];
+  const toggle = e.key === "Enter" || e.key === " ";
+  if (!step && !toggle) return;
+  e.preventDefault();
+  const { cols, rows } = run.ladder;
+  // Clamp first: the ladder may have shrunk since the cursor last moved.
+  ladderCursor = moveRungCursor(ladderCursor, 0, 0, cols, rows);
+  // Focus by mouse hides the cursor. The first key only brings it up, so a Space
+  // meant to scroll cannot silently undo the rung that was just clicked.
+  const wasShown = ladderCursorShown;
+  ladderCursorShown = true;
+  if (step) ladderCursor = moveRungCursor(ladderCursor, step[0], step[1], cols, rows);
+  else if (wasShown && !e.repeat) {
+    // Held Enter/Space would flip the rung on every auto-repeat.
+    if (toggleLadderRung(run, ladderCursor)) announceLadderCursor(run);
+    return;
+  }
+  renderLadderCanvas();
+  announceLadderCursor(run);
+}
+
+function showLadderCursor(shown: boolean) {
+  ladderCursorShown = shown;
+  renderLadderCanvas();
+  if (shown && ladderRun && ladderRun.slots === null && ladderRun.ladder.cols > 1) {
+    ladderCursor = moveRungCursor(ladderCursor, 0, 0, ladderRun.ladder.cols, ladderRun.ladder.rows);
+    announceLadderCursor(ladderRun);
+  }
+}
+
+/**
+ * A density change regenerates an unlocked ladder. Hand-edited rungs would vanish
+ * with it, so that case asks first; cancelling restores the select (via syncControls).
+ */
+async function setLadderDensity(value: string) {
+  const next = (LADDER_DENSITIES as readonly string[]).includes(value)
     ? (value as LadderDensity)
     : "normal";
+  const before = ladderRun;
+  if (before && before.slots === null && before.edited && next !== ladderDensity) {
+    const ok = await confirmModal(
+      "가로줄 수를 바꾸면 직접 고친 가로줄이 사라지고 새 사다리가 만들어집니다. 계속할까요?",
+    );
+    if (!ok) {
+      syncControls();
+      return;
+    }
+  }
+  ladderDensity = next;
   const run = ladderRun;
-  if (run && run.slots === null)
+  if (run && run.slots === null) {
     run.ladder = generateRungs(run.players.length, LADDER_ROWS, ladderDensity);
+    run.edited = false;
+  }
   syncControls();
 }
 
@@ -844,7 +952,7 @@ function animateLadderPath(col: number, ms: number): Promise<void> {
 function applyLadderReveal(run: LadderRun, col: number, celebrate: boolean): boolean {
   run.revealed[col] = true;
   const playerId = run.placement[col];
-  const prizeId = run.slots![traceLadder(run.ladder, col).endCol];
+  const prizeId = run.slots![run.traces![col]!.endCol];
   const won =
     !!playerId && !!prizeId && recordWin(state, playerId, prizeId, new Date().toISOString());
   persist();
@@ -916,7 +1024,8 @@ function openLadderResult(run: LadderRun) {
   const prizeName = new Map(run.prizes.map((z) => [z.id, z.name]));
   els.ladderResultBody.replaceChildren(
     ...run.placement.map((_, c) => {
-      const prizeId = run.slots?.[traceLadder(run.ladder, c).endCol] ?? null;
+      const end = run.traces?.[c]?.endCol;
+      const prizeId = end === undefined ? null : (run.slots?.[end] ?? null);
       const tr = document.createElement("tr");
       const cells = [
         String(c + 1),
@@ -1254,8 +1363,13 @@ els.ladderNew.addEventListener("click", newLadder);
 els.ladderFill.addEventListener("click", fillLadder);
 els.ladderLock.addEventListener("click", lockLadder);
 els.ladderReveal.addEventListener("click", revealLadder);
-els.ladderDensity.addEventListener("change", () => setLadderDensity(els.ladderDensity.value));
+els.ladderDensity.addEventListener("change", () => void setLadderDensity(els.ladderDensity.value));
 els.ladderCanvas.addEventListener("click", onLadderCanvasClick);
+els.ladderCanvas.addEventListener("keydown", onLadderCanvasKey);
+els.ladderCanvas.addEventListener("focus", () =>
+  showLadderCursor(els.ladderCanvas.matches(":focus-visible")),
+);
+els.ladderCanvas.addEventListener("blur", () => showLadderCursor(false));
 els.ladderResultClose.addEventListener("click", closeLadderResult);
 els.ladderResultOverlay.addEventListener("click", (e) => {
   if (e.target === els.ladderResultOverlay) closeLadderResult(); // backdrop, not card

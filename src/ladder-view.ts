@@ -38,6 +38,8 @@ export interface LadderViewModel {
   top: readonly (LadderTopLabel | null)[];
   bottom: readonly LadderBottomLabel[];
   paths: readonly LadderPath[];
+  /** Keyboard rung cursor, drawn only while the canvas has focus before lock. */
+  cursor?: Rung | null;
 }
 
 export interface LadderView {
@@ -90,6 +92,21 @@ export function rungAt(
   const col = Math.floor(x / spacing - 0.5);
   if (row < 0 || row >= rows || col < 0 || col > cols - 2) return null;
   return { row, col };
+}
+
+/**
+ * Keyboard rung cursor: step `dRow` rows and `dCol` gaps, clamped to the grid of a
+ * `cols`-post, `rows`-row ladder (no wrap). Also pulls a stale cursor back inside.
+ */
+export function moveRungCursor(
+  c: Rung,
+  dRow: number,
+  dCol: number,
+  cols: number,
+  rows: number,
+): Rung {
+  const clamp = (v: number, hi: number) => Math.max(0, Math.min(hi, v));
+  return { row: clamp(c.row + dRow, rows - 1), col: clamp(c.col + dCol, cols - 2) };
 }
 
 export interface Point {
@@ -201,6 +218,19 @@ export function createLadderView(canvas: HTMLCanvasElement): LadderView {
       ctx.moveTo(colX(r.col), y);
       ctx.lineTo(colX(r.col + 1), y);
       ctx.stroke();
+    }
+
+    if (model.cursor && cols > 1) {
+      // Dashed box around the cursor's rung slot; solid rung or empty, it reads either way.
+      const { row, col } = model.cursor;
+      const y = yAt(row + 1);
+      const pad = Math.min(10, (y1 - y0) / (ladder.rows + 1) / 2 - 1);
+      ctx.save();
+      ctx.strokeStyle = PRIZE;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 4]);
+      ctx.strokeRect(colX(col) + 3, y - pad, spacing - 6, pad * 2);
+      ctx.restore();
     }
 
     // Traced paths on top of the ladder.

@@ -53,7 +53,8 @@ export const LADDER_MAX_COLS = 30;
 /** Rung levels per ladder. Enough for several crossings per path at any column count. */
 export const LADDER_ROWS = 12;
 
-const hasRung = (l: Ladder, row: number, col: number): boolean =>
+/** Whether `l` has a rung on `row` between post `col` and post `col + 1`. */
+export const hasRung = (l: Ladder, row: number, col: number): boolean =>
   l.rungs.some((r) => r.row === row && r.col === col);
 
 /**
