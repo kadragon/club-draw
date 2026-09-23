@@ -1,6 +1,6 @@
 {
   "name": "club-draw",
-  "version": "1.21.0",
+  "version": "1.22.2",
   "type": "module",
   "private": true,
   "scripts": {

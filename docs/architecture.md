@@ -22,13 +22,13 @@ types.ts        도메인 모델만. 의존 없음.
    ↑
 picks.ts        MAX_PICKS·normalizePicks. types만 — Worker도 임포트.
    ↑
-draw.ts  csv.ts  state.ts   순수 로직 / 영속화. DOM 의존 없음.
+draw.ts  ladder.ts  csv.ts  state.ts   순수 로직 / 영속화. DOM 의존 없음(ladder → draw.randomBelow).
    ↑                ↑
    │            session.ts   운영자 API 클라이언트(fetch 주입). state.readPicks 사용.
    │                ↑
    │            pick-client.ts  참가자 API 클라이언트·claim 저장 형식. session.request 재사용.
    │                ↑
-wheel.ts confetti.ts sound.ts motion.ts qr.ts   ui.ts
+wheel.ts ladder-view.ts confetti.ts sound.ts motion.ts qr.ts   ui.ts
    ↑                                              ↑
 main.ts   운영자 DOM 배선 + 오케스트레이션.      pick.ts   참가자 DOM 배선.
 
@@ -47,11 +47,13 @@ worker/index.ts  →  src/picks.ts   (이 한 방향만. Worker는 브라우저 
 | `src/types.ts` | 도메인 인터페이스(Participant·Prize·Settings·DrawMode·PicksMap·SessionRef·Wheel…) | — |
 | `src/picks.ts` | `MAX_PICKS`·`normalizePicks`(중복 제거 → 미지 id 거부 → 개수 상한) | ✅ 테스트됨 |
 | `src/draw.ts` | `selectWinner`(crypto 가중 추첨)·`candidatesFor`(모드별 후보·폴백)·`buildWheel`·`computeTargetRotation`·`wedgeAtPointer` | ✅ 테스트됨 |
+| `src/ladder.ts` | 사다리 코어: `canPlaceRung`·`toggleRung`·`generateRungs`(밀도 3단계)·`traceLadder`·`shuffleSlots`(잠금 시 결정)·배치(`placeAt`·`fillRandom`) | ✅ 테스트됨 |
 | `src/csv.ts` | `parseRoster`·`recordsToCSV` | ✅ 테스트됨 |
 | `src/state.ts` | localStorage 로드/저장(`club-draw:v1`), 부분/손상 페이로드 허용, `picks`·`session` 필드, 리셋·백업 복원 | ✅ |
 | `src/session.ts` | 운영자 API 클라이언트(`openSession`·`closeSession`·`pullSnapshot`·`deleteSession`), 페이로드 빌드·에러 메시지 | ✅ 테스트됨 |
 | `src/pick-client.ts` | 참가자 API 클라이언트, claim 토큰 저장 키(`club-draw:pick:{sessionId}`) | ✅ 테스트됨 |
 | `src/wheel.ts` | Canvas 렌더. 3시 기준 → `canvasAngle = φ − π/2` | 브라우저 |
+| `src/ladder-view.ts` | 사다리 Canvas 렌더(계산된 path만 그림), `rungAt` hit-test, `polylinePrefix` 경로 애니메이션 | 브라우저(기하 함수 테스트됨) |
 | `src/ui.ts` | 참가자·상품·기록 목록 DOM 생성(상태·정책 없음, `types.ts`만 의존) | 브라우저 |
 | `src/qr.ts` | 참가자 링크 QR을 Canvas에 그림(번들 의존 `uqr`, 외부 CDN 없음) | 브라우저 |
 | `src/motion.ts` | `prefers-reduced-motion` JS 게이트(컨페티·idle drift) | 브라우저 |

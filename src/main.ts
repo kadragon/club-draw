@@ -27,14 +27,17 @@ import {
   clearAt,
   fillRandom,
   generateRungs,
+  LADDER_DENSITIES,
   LADDER_MAX_COLS,
   LADDER_ROWS,
   type Ladder,
+  type LadderDensity,
   placeAt,
   shuffleSlots,
+  toggleRung,
   traceLadder,
 } from "./ladder.js";
-import { createLadderView, type LadderViewModel, ladderLayout } from "./ladder-view.js";
+import { createLadderView, type LadderViewModel, ladderLayout, rungAt } from "./ladder-view.js";
 import { createMotionPreference } from "./motion.js";
 import { drawQr } from "./qr.js";
 import {
@@ -102,6 +105,10 @@ const els = {
   ladderFill: $("ladder-fill") as HTMLButtonElement,
   ladderLock: $("ladder-lock") as HTMLButtonElement,
   ladderReveal: $("ladder-reveal") as HTMLButtonElement,
+  ladderDensity: $("ladder-density") as HTMLSelectElement,
+  ladderResultOverlay: $("ladder-result-overlay"),
+  ladderResultBody: $("ladder-result-body"),
+  ladderResultClose: $("ladder-result-close") as HTMLButtonElement,
   currentPrize: $("current-prize"),
   progress: $("progress"),
   modeBadge: $("mode-badge"),
@@ -475,6 +482,12 @@ interface LadderRun {
 let ladderRun: LadderRun | null = null;
 /** Roster chip picked for placement; the next top-slot click places this player. */
 let ladderPick: string | null = null;
+/** Rung density for generated ladders; a session-only operator choice. */
+let ladderDensity: LadderDensity = "normal";
+/** True while a reveal animation plays; one path at a time, no edits meanwhile. */
+let ladderBusy = false;
+/** The path being drawn: start column and drawn fraction. Render-only, decides nothing. */
+let ladderAnim: { col: number; t: number } | null = null;
 
 /** The method in effect: preference mode always runs the wheel, whatever is stored. */
 function activeMethod(): DrawMethod {
@@ -503,7 +516,7 @@ function buildLadderRun(): LadderRun | null {
   if (players.length === 0 || prizes.length === 0 || players.length > LADDER_MAX_COLS) return null;
   const cols = players.length;
   return {
-    ladder: generateRungs(cols, LADDER_ROWS, "normal"),
+    ladder: generateRungs(cols, LADDER_ROWS, ladderDensity),
     players,
     placement: players.map(() => null),
     prizes,
@@ -557,13 +570,21 @@ function ladderModel(run: LadderRun): LadderViewModel {
       return { covered: !reached.has(c), prize: id === null ? null : (prizeName.get(id) ?? null) };
     }),
     paths: ends
-      .map((t, c) => ({ points: t.path, color: colorFor(run.placement[c] ?? "") }))
-      .filter((_, c) => run.revealed[c]),
+      .map((t, c) => ({
+        points: t.path,
+        color: colorFor(run.placement[c] ?? ""),
+        progress: run.revealed[c] ? 1 : ladderAnim?.col === c ? ladderAnim.t : 0,
+      }))
+      .filter((p) => p.progress > 0),
   };
 }
 
-function renderLadder() {
+function renderLadderCanvas() {
   ladderView.setModel(ladderRun ? ladderModel(ladderRun) : null);
+}
+
+function renderLadder() {
+  renderLadderCanvas();
   renderLadderPlacement();
 }
 
@@ -581,22 +602,34 @@ function renderLadderPlacement() {
       : null;
   const run = ladderRun;
   const open = !!run && run.slots === null;
+  // After lock, an unrevealed name is the button that reveals that player's path.
+  const revealable = (c: number) =>
+    !!run &&
+    run.slots !== null &&
+    !run.revealed[c] &&
+    !ladderBusy &&
+    document.body.classList.contains("stage-mode");
   const canvas = els.ladderCanvas;
+  canvas.classList.toggle("is-editable", open);
   const { band } = ladderLayout(
     canvas.clientWidth || 640,
     canvas.clientHeight || 480,
     run?.players.length ?? 0,
   );
   els.ladderSlots.style.height = `${band + 4}px`;
-  els.ladderSlots.classList.toggle("is-armed", ladderPick !== null);
+  els.ladderSlots.classList.toggle(
+    "is-armed",
+    ladderPick !== null || (run?.placement.some((_, c) => revealable(c)) ?? false),
+  );
   els.ladderSlots.replaceChildren(
     ...(run?.placement ?? []).map((_, c) => {
       const b = document.createElement("button");
       b.type = "button";
-      b.disabled = !open;
+      b.disabled = !open && !revealable(c);
       b.dataset.key = `slot:${c}`;
       const p = run ? playerAt(run, c) : undefined;
-      b.setAttribute("aria-label", `${c + 1}번 칸: ${p ? p.name : "비어 있음"}`);
+      const suffix = run?.revealed[c] ? " — 공개됨" : revealable(c) ? " — 눌러서 결과 공개" : "";
+      b.setAttribute("aria-label", `${c + 1}번 칸: ${p ? p.name : "비어 있음"}${suffix}`);
       b.addEventListener("click", () => onLadderSlot(c));
       return b;
     }),
@@ -630,10 +663,14 @@ function renderLadderPlacement() {
   }
 }
 
-/** Chip picked → place it here; no chip picked → clear this slot. */
+/** Locked → reveal this player. Unlocked: chip picked → place it here; none → clear this slot. */
 function onLadderSlot(col: number) {
   const run = ladderRun;
-  if (!run || run.slots !== null) return;
+  if (!run) return;
+  if (run.slots !== null) {
+    void revealLadderAt(col);
+    return;
+  }
   if (ladderPick !== null) run.placement = [...placeAt(run.placement, col, ladderPick)];
   else if (run.placement[col] !== null) run.placement = clearAt(run.placement, col);
   else return;
@@ -677,15 +714,20 @@ function syncLadderControls() {
   }
 
   const locked = !!run && run.slots !== null;
+  const done = !!run && ladderDone(run);
   const canLock = inStage && !!run && !locked && ladderPlaced(run);
-  const canReveal = inStage && !!run && locked && !ladderDone(run);
+  // Once every path is out, the same button reopens the result table.
+  const canReveal = !!run && locked && !ladderBusy && (done || inStage);
   els.ladderLock.setAttribute("aria-disabled", canLock ? "false" : "true");
   els.ladderReveal.setAttribute("aria-disabled", canReveal ? "false" : "true");
+  els.ladderReveal.textContent = done ? "결과표" : "전체 공개";
   els.ladderNew.disabled = ladderInFlight();
+  els.ladderDensity.value = ladderDensity;
+  els.ladderDensity.disabled = ladderInFlight();
   els.ladderFill.disabled = !run || locked || ladderPlaced(run);
   const stageHint = inStage ? "" : "발표 모드에서 진행할 수 있습니다";
   els.ladderLock.title = stageHint;
-  els.ladderReveal.title = stageHint;
+  els.ladderReveal.title = done ? "" : stageHint;
 
   if (tooMany) els.status.textContent = `사다리는 최대 ${LADDER_MAX_COLS}명까지 탈 수 있습니다.`;
   else if (players.length === 0) els.status.textContent = "남은 참가자가 없습니다.";
@@ -694,8 +736,10 @@ function syncLadderControls() {
     els.status.textContent =
       "명단에서 이름을 고른 뒤 위쪽 칸을 눌러 배치하세요. 배치된 칸을 다시 누르면 빠집니다.";
   else if (run && !locked)
-    els.status.textContent = "시작을 누르면 사다리가 잠기고 결과가 정해집니다.";
-  else if (run && !ladderDone(run)) els.status.textContent = "결과가 정해졌습니다. 공개하세요.";
+    els.status.textContent =
+      "사다리를 눌러 가로줄을 넣거나 뺄 수 있습니다. 시작을 누르면 사다리가 잠기고 결과가 정해집니다.";
+  else if (run && !done)
+    els.status.textContent = "결과가 정해졌습니다. 이름을 눌러 한 명씩, 또는 전체 공개하세요.";
   else els.status.textContent = "";
 }
 
@@ -704,7 +748,7 @@ function newLadder() {
   if (!ladderActive() || ladderInFlight()) return;
   const run = ladderRun;
   if (run && run.slots === null)
-    run.ladder = generateRungs(run.players.length, LADDER_ROWS, "normal");
+    run.ladder = generateRungs(run.players.length, LADDER_ROWS, ladderDensity);
   else {
     ladderRun = buildLadderRun();
     ladderPick = null;
@@ -726,21 +770,85 @@ function lockLadder() {
   syncControls();
 }
 
-/** Reveal every remaining player at once, applying each win to the session. */
-function revealLadder() {
-  unlockAudio();
+/** Click on the ladder body: add or remove the rung under the pointer, until lock. */
+function onLadderCanvasClick(e: MouseEvent) {
   const run = ladderRun;
-  if (els.ladderReveal.getAttribute("aria-disabled") === "true" || !run || !run.slots) return;
-  const at = new Date().toISOString();
-  let won = 0;
-  run.placement.forEach((playerId, c) => {
-    if (run.revealed[c] || playerId === null) return;
-    run.revealed[c] = true;
-    const prizeId = run.slots![traceLadder(run.ladder, c).endCol];
-    if (prizeId && recordWin(state, playerId, prizeId, at)) won++;
+  // A double-click's second click would undo the first toggle.
+  if (!run || run.slots !== null || e.detail > 1) return;
+  const canvas = els.ladderCanvas;
+  const hit = rungAt(
+    e.offsetX,
+    e.offsetY,
+    canvas.clientWidth,
+    canvas.clientHeight,
+    run.ladder.cols,
+    run.ladder.rows,
+  );
+  if (!hit) return;
+  const next = toggleRung(run.ladder, hit);
+  if (next === run.ladder) {
+    syncControls();
+    els.status.textContent = "옆 가로줄과 같은 높이에는 놓을 수 없습니다.";
+    return;
+  }
+  run.ladder = next;
+  syncControls();
+}
+
+function setLadderDensity(value: string) {
+  ladderDensity = (LADDER_DENSITIES as readonly string[]).includes(value)
+    ? (value as LadderDensity)
+    : "normal";
+  const run = ladderRun;
+  if (run && run.slots === null)
+    run.ladder = generateRungs(run.players.length, LADDER_ROWS, ladderDensity);
+  syncControls();
+}
+
+/**
+ * Per-path draw time, from the wheel's spin length: a solo reveal lingers, a batch
+ * moves on. Capped so a 20s spin setting cannot stretch 30 paths into minutes.
+ */
+function ladderPathMs(batch: boolean): number {
+  const solo = Math.min(6000, state.settings.spinMs * 0.5);
+  return batch ? Math.min(1500, Math.max(400, solo * 0.4)) : solo;
+}
+
+/**
+ * Draw column `col`'s precomputed path over `ms`. Presentation only: the result was
+ * fixed at lock and is applied after this resolves. Reduced motion skips straight
+ * to the end.
+ */
+function animateLadderPath(col: number, ms: number): Promise<void> {
+  if (motion.reduced()) return Promise.resolve();
+  return new Promise((resolve) => {
+    const start = performance.now();
+    const frame = (now: number) => {
+      const t = Math.min(1, (now - start) / ms);
+      ladderAnim = { col, t };
+      renderLadderCanvas();
+      if (t < 1) requestAnimationFrame(frame);
+      else {
+        ladderAnim = null;
+        resolve();
+      }
+    };
+    requestAnimationFrame(frame);
   });
+}
+
+/**
+ * The path has arrived: uncover its slot and apply a win to the session. `celebrate`
+ * false defers the fanfare to the caller (an instant batch would stack them).
+ */
+function applyLadderReveal(run: LadderRun, col: number, celebrate: boolean): boolean {
+  run.revealed[col] = true;
+  const playerId = run.placement[col];
+  const prizeId = run.slots![traceLadder(run.ladder, col).endCol];
+  const won =
+    !!playerId && !!prizeId && recordWin(state, playerId, prizeId, new Date().toISOString());
   persist();
-  if (won > 0) {
+  if (won && celebrate) {
     if (state.settings.sound) playFanfare();
     if (!motion.reduced()) fireConfetti();
   }
@@ -748,6 +856,90 @@ function revealLadder() {
   renderPrizes();
   renderRecords();
   syncControls();
+  return won;
+}
+
+/** Play `cols` one after another; the table opens when the last path is out. */
+async function playLadderReveals(cols: number[], ms: number) {
+  const run = ladderRun;
+  if (!run?.slots || ladderBusy) return;
+  unlockAudio();
+  // Slot buttons go disabled while busy and focus falls to <body>; hand it back after.
+  const fromSlots = els.ladderSlots.contains(document.activeElement);
+  // Reduced motion resolves every path at once: one fanfare for the batch, not a pile-up.
+  const instant = motion.reduced();
+  let anyWin = false;
+  ladderBusy = true;
+  syncControls();
+  try {
+    for (const c of cols) {
+      if (run.revealed[c]) continue;
+      await animateLadderPath(c, ms);
+      if (ladderRun !== run) return;
+      if (applyLadderReveal(run, c, !instant)) anyWin = true;
+    }
+  } finally {
+    ladderBusy = false;
+    ladderAnim = null;
+    syncControls();
+  }
+  if (instant && anyWin && state.settings.sound) playFanfare();
+  if (ladderDone(run)) openLadderResult(run);
+  else if (fromSlots) {
+    const next = [...els.ladderSlots.children].find(
+      (b): b is HTMLButtonElement => b instanceof HTMLButtonElement && !b.disabled,
+    );
+    (next ?? els.ladderReveal).focus();
+  }
+}
+
+function revealLadderAt(col: number) {
+  const run = ladderRun;
+  if (!run?.slots || run.revealed[col]) return;
+  return playLadderReveals([col], ladderPathMs(false));
+}
+
+/** "전체 공개": the remaining players left to right; once done, reopen the table. */
+function revealLadder() {
+  const run = ladderRun;
+  if (els.ladderReveal.getAttribute("aria-disabled") === "true" || !run || !run.slots) return;
+  if (ladderDone(run)) {
+    openLadderResult(run);
+    return;
+  }
+  const rest = run.placement.map((_, c) => c).filter((c) => !run.revealed[c]);
+  void playLadderReveals(rest, ladderPathMs(rest.length > 1));
+}
+
+/** "출발 칸 · 이름 → 결과" table, built with textContent only (names are user input). */
+function openLadderResult(run: LadderRun) {
+  const prizeName = new Map(run.prizes.map((z) => [z.id, z.name]));
+  els.ladderResultBody.replaceChildren(
+    ...run.placement.map((_, c) => {
+      const prizeId = run.slots?.[traceLadder(run.ladder, c).endCol] ?? null;
+      const tr = document.createElement("tr");
+      const cells = [
+        String(c + 1),
+        playerAt(run, c)?.name ?? "",
+        prizeId === null ? "꽝" : (prizeName.get(prizeId) ?? ""),
+      ];
+      for (const text of cells) {
+        const td = document.createElement("td");
+        td.textContent = text;
+        tr.append(td);
+      }
+      tr.lastElementChild!.className = prizeId === null ? "is-blank" : "is-win";
+      return tr;
+    }),
+  );
+  els.ladderResultOverlay.hidden = false;
+  els.ladderResultClose.focus();
+}
+
+function closeLadderResult() {
+  if (els.ladderResultOverlay.hidden) return;
+  els.ladderResultOverlay.hidden = true;
+  els.ladderReveal.focus();
 }
 
 // ── Preference session (network only here; the draw stays offline) ─────────
@@ -1062,6 +1254,12 @@ els.ladderNew.addEventListener("click", newLadder);
 els.ladderFill.addEventListener("click", fillLadder);
 els.ladderLock.addEventListener("click", lockLadder);
 els.ladderReveal.addEventListener("click", revealLadder);
+els.ladderDensity.addEventListener("change", () => setLadderDensity(els.ladderDensity.value));
+els.ladderCanvas.addEventListener("click", onLadderCanvasClick);
+els.ladderResultClose.addEventListener("click", closeLadderResult);
+els.ladderResultOverlay.addEventListener("click", (e) => {
+  if (e.target === els.ladderResultOverlay) closeLadderResult(); // backdrop, not card
+});
 
 els.sessionOpen.addEventListener("click", () => {
   if (spinLocked()) return;
@@ -1199,6 +1397,7 @@ document.addEventListener("keydown", (e) => {
     return;
   } // dismiss as cancel
   if (!els.fairnessOverlay.hidden) closeFairness();
+  else if (!els.ladderResultOverlay.hidden) closeLadderResult();
   else if (!els.resultOverlay.hidden) closeResult();
   else if (!els.overlay.hidden) closeOverlayAndAdvance();
 });

@@ -25,6 +25,8 @@
 - 선호 모드 후보 = `picks[prizeId] ∩ 미당첨자`, 비면 미당첨자 전원 폴백(`fellBack` → UI 배지).
 - 가중치 base(`effectiveBaseSlots`)는 **전체 명부** 기준, `selectWinner`·각도 규약은 모드와 무관.
 - 추첨 경로는 **오프라인**: 네트워크는 세션 개설·마감·pull·삭제에만. 스핀 중 `/api` 호출 금지.
+- 사다리(`settings.method: "ladder"`)도 결정 후 연출: 결과 = `traceLadder` + 잠금 시 `shuffleSlots` 한 번,
+  경로 애니메이션은 그 path를 그리기만 한다(멈춘 칸 == 반영 상품). 잠금 후 배치·가로줄 편집 불가, 가중치 없음.
 - 1인 최대 선택 수는 `MAX_PICKS`(`src/picks.ts`) 단일 출처 — 폼·Worker 검증 공용. 리터럴 금지.
 
 ## TDD / 검증

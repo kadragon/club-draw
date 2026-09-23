@@ -168,6 +168,14 @@
           </div>
           <div id="ladder-roster" class="ladder-roster" aria-label="배치할 참가자"></div>
           <div class="ladder-actions">
+            <label class="ladder-density">
+              가로줄
+              <select id="ladder-density" class="input">
+                <option value="low">적게</option>
+                <option value="normal" selected>보통</option>
+                <option value="high">많이</option>
+              </select>
+            </label>
             <button id="ladder-new" class="btn btn-secondary" type="button">새 사다리</button>
             <button id="ladder-fill" class="btn btn-secondary" type="button">나머지 랜덤 배치</button>
             <button id="ladder-lock" class="btn btn-primary" type="button" aria-disabled="true">시작</button>
@@ -272,6 +280,27 @@
     </div>
 
     <div
+      id="ladder-result-overlay"
+      class="overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ladder-result-title"
+      hidden
+    >
+      <div class="overlay-card result-card">
+        <button id="ladder-result-close" class="overlay-close" type="button" aria-label="닫기">×</button>
+        <span class="eyebrow">사다리 결과</span>
+        <h2 id="ladder-result-title" class="fairness-title">출발 칸 · 이름 → 결과</h2>
+        <table class="ladder-result-table">
+          <thead>
+            <tr><th scope="col">칸</th><th scope="col">이름</th><th scope="col">결과</th></tr>
+          </thead>
+          <tbody id="ladder-result-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div
       id="fairness-overlay"
       class="overlay"
       role="dialog"
@@ -312,6 +341,12 @@
           <li>
             <span class="fp-key">중복 없는 추첨</span>
             <span class="fp-val">한 번 당첨된 사람은 이후 추첨에서 자동으로 빠집니다 — 한 사람이 상품을 독차지할 수 없어요.</span>
+          </li>
+          <li>
+            <span class="fp-key">사다리는 잠글 때 결정</span>
+            <span class="fp-val"
+              >시작을 누르는 순간 같은 내장 난수로 아래 칸을 골고루 섞습니다. 그 전에는 결과가 아무 데도 없어서, 출발 칸을 고르거나 가로줄을 넣고 빼도 누구에게도 유리해지지 않아요. 사다리는 누적 당첨을 반영하지 않고 모두 같은 확률입니다.</span
+            >
           </li>
         </ul>
 
