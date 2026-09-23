@@ -575,14 +575,20 @@ const colorFor = (id: string): number =>
 
 function ladderModel(run: LadderRun): LadderViewModel {
   const prizeName = new Map(run.prizes.map((z) => [z.id, z.name]));
+  // Runs every animation frame: index once instead of find/findIndex per column.
+  const byId = new Map(run.players.map((p) => [p.id, p]));
+  const rosterIndex = new Map(state.participants.map((x, i) => [x.id, i]));
+  const colorOf = (id: string | null | undefined): number =>
+    (id == null ? undefined : rosterIndex.get(id)) ?? 0;
   // Pre-lock nothing is revealed or animating, so there is no path to draw.
   const ends = run.traces ?? [];
   const reached = new Set(ends.filter((_, c) => run.revealed[c]).map((t) => t.endCol));
   return {
     ladder: run.ladder,
     top: run.players.map((_, c) => {
-      const p = playerAt(run, c);
-      return p ? { name: p.name, color: colorFor(p.id) } : null;
+      const id = run.placement[c];
+      const p = id == null ? undefined : byId.get(id);
+      return p ? { name: p.name, color: colorOf(p.id) } : null;
     }),
     bottom: run.players.map((_, c) => {
       const id = run.slots?.[c] ?? null;
@@ -591,7 +597,7 @@ function ladderModel(run: LadderRun): LadderViewModel {
     paths: ends
       .map((t, c) => ({
         points: t.path,
-        color: colorFor(run.placement[c] ?? ""),
+        color: colorOf(run.placement[c]),
         progress: run.revealed[c] ? 1 : ladderAnim?.col === c ? ladderAnim.t : 0,
       }))
       .filter((p) => p.progress > 0),
