@@ -5,6 +5,7 @@
 
 ## Review Backlog
 
-### PR #58 — ladderModel: index players and roster colors once per frame (2026-09-23)
+### PR #59 — ladder: build static view model once per render, animate progress only (2026-09-23)
 
-- [ ] [debt] `ladderModel`이 경로 애니메이션 중 매 프레임 top/bottom 등 정적 부분까지 재구성 — 정적 부분은 run/상태 변경 시 1회, 프레임마다 `paths[].progress`만 갱신 (stale 위험 주의: placement·roster 변동) (source: code-review) — `src/main.ts` `ladderModel`
+- [ ] [debt] 키보드 커서 이동·포커스(`showLadderCursor`)가 `cursor`만 바뀌어도 `renderLadderCanvas`로 base 전체 재구성 — 커서만 갱신하는 경로 분리 (source: code-review) — `src/main.ts` `renderLadderCanvas`
+- [ ] [constraint] 캐시된 프레임 경로(`ladderFrameBase`/`ladderModel`/`renderLadderFrame`)가 테스트 없는 `main.ts`에 있음 — 순수 `ladderFrame(base, anim)`로 추출해 `test/`에서 커버하거나 dev 전용 stale 단언 추가 (source: code-review) — `src/main.ts` `renderLadderFrame`
