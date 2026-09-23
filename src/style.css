@@ -738,6 +738,10 @@ body {
 .ladder.is-editable {
   cursor: pointer;
 }
+.ladder:focus-visible {
+  outline: 3px solid var(--pink);
+  outline-offset: 2px;
+}
 .ladder-result-table {
   width: 100%;
   border-collapse: collapse;
