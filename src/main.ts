@@ -591,9 +591,10 @@ const colorFor = (id: string | null | undefined, index = rosterIndex()): number 
 /**
  * The view model minus the per-frame overlay (path being animated, rung cursor):
  * labels, revealed paths, and each path's points and color keyed by column. Rebuilt
- * on every full canvas render; animation frames and cursor moves reuse it. Invariant: anything that mutates the run or roster
- * ends in `syncControls`/`renderLadderCanvas` — the `run` identity check below only
- * catches a replaced run, not an in-place edit.
+ * on every full canvas render; animation frames and cursor moves reuse it.
+ * Invariant: anything that mutates the run or roster ends in
+ * `syncControls`/`renderLadderCanvas` — the `run` identity check below only catches
+ * a replaced run, not an in-place edit.
  */
 interface LadderFrameBase {
   run: LadderRun;
@@ -637,8 +638,11 @@ function ladderFrameBase(run: LadderRun): LadderFrameBase {
 
 /** The base plus the path in flight and, before lock, the focused rung cursor. */
 function ladderModel({ run, model, pathAt }: LadderFrameBase): LadderViewModel {
-  const cursor = ladderCursorShown && run.slots === null ? ladderCursor : null;
-  return ladderFrame(model, pathAt, ladderAnim, cursor);
+  return ladderFrame(model, pathAt, {
+    anim: ladderAnim,
+    cursor: ladderCursorShown ? ladderCursor : null,
+    locked: run.slots !== null,
+  });
 }
 
 function renderLadderCanvas() {

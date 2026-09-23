@@ -53,7 +53,7 @@ worker/index.ts  →  src/picks.ts   (이 한 방향만. Worker는 브라우저 
 | `src/session.ts` | 운영자 API 클라이언트(`openSession`·`closeSession`·`pullSnapshot`·`deleteSession`), 페이로드 빌드·에러 메시지 | ✅ 테스트됨 |
 | `src/pick-client.ts` | 참가자 API 클라이언트, claim 토큰 저장 키(`club-draw:pick:{sessionId}`) | ✅ 테스트됨 |
 | `src/wheel.ts` | Canvas 렌더. 3시 기준 → `canvasAngle = φ − π/2` | 브라우저 |
-| `src/ladder-view.ts` | 사다리 Canvas 렌더(계산된 path만 그림), `rungAt` hit-test, `moveRungCursor` 키보드 가로줄 커서, `polylinePrefix` 경로 애니메이션 | 브라우저(기하 함수 테스트됨) |
+| `src/ladder-view.ts` | 사다리 Canvas 렌더(계산된 path만 그림), `rungAt` hit-test, `moveRungCursor` 키보드 가로줄 커서, `polylinePrefix` 경로 애니메이션, `ladderFrame` 프레임 오버레이(이동 중 경로·커서) | 브라우저(기하·오버레이 함수 테스트됨) |
 | `src/ui.ts` | 참가자·상품·기록 목록 DOM 생성(상태·정책 없음, `types.ts`만 의존) | 브라우저 |
 | `src/qr.ts` | 참가자 링크 QR을 Canvas에 그림(번들 의존 `uqr`, 외부 CDN 없음) | 브라우저 |
 | `src/motion.ts` | `prefers-reduced-motion` JS 게이트(컨페티·idle drift) | 브라우저 |

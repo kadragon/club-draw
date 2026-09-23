@@ -115,23 +115,31 @@ export interface LadderAnim {
   t: number;
 }
 
+/** What changes between frames on top of the cached static model. */
+export interface LadderOverlay {
+  anim: LadderAnim | null;
+  /** The focused rung cursor, or null when the canvas does not show one. */
+  cursor: Rung | null;
+  /** Locked ladders take no edits, so no cursor is drawn. */
+  locked: boolean;
+}
+
 /**
- * One animation frame: the static `base` (built once per full render) plus what
- * changes between frames — the path in flight (`pathAt[anim.col]` at progress
- * `anim.t`) and the rung cursor, clamped to the grid. Never mutates its inputs.
+ * One animation frame: the static `base` (built once per full render) plus the
+ * overlay — the path in flight (`pathAt[anim.col]` at progress `anim.t`) and,
+ * before lock, the rung cursor clamped to the grid. Never mutates its inputs.
  */
 export function ladderFrame(
   base: LadderViewModel,
   pathAt: readonly LadderPath[],
-  anim: LadderAnim | null,
-  cursor: Rung | null,
+  { anim, cursor, locked }: LadderOverlay,
 ): LadderViewModel {
   const moving = anim && anim.t > 0 ? pathAt[anim.col] : undefined;
   const { cols, rows } = base.ladder;
   return {
     ...base,
-    paths: moving ? [...base.paths, { ...moving, progress: anim!.t }] : base.paths,
-    cursor: cursor && cols > 1 ? moveRungCursor(cursor, 0, 0, cols, rows) : null,
+    paths: anim && moving ? [...base.paths, { ...moving, progress: anim.t }] : base.paths,
+    cursor: cursor && !locked && cols > 1 ? moveRungCursor(cursor, 0, 0, cols, rows) : null,
   };
 }
 

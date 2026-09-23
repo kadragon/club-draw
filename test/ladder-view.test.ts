@@ -140,41 +140,60 @@ describe("ladderFrame — per-frame overlay on the cached static model", () => {
   }));
 
   it("no animation, no cursor: the base paths, cursor null", () => {
-    const m = ladderFrame(base, pathAt, null, null);
+    const m = ladderFrame(base, pathAt, { anim: null, cursor: null, locked: false });
     expect(m.paths).toEqual([revealed]);
     expect(m.cursor).toBeNull();
     expect(m.ladder).toBe(base.ladder);
   });
 
   it("an animation at t = 0 draws nothing yet", () => {
-    expect(ladderFrame(base, pathAt, { col: 2, t: 0 }, null).paths).toEqual([revealed]);
+    expect(
+      ladderFrame(base, pathAt, { anim: { col: 2, t: 0 }, cursor: null, locked: false }).paths,
+    ).toEqual([revealed]);
   });
 
   it("appends the moving column's path at progress t, after the revealed ones", () => {
-    const m = ladderFrame(base, pathAt, { col: 2, t: 0.25 }, null);
+    const m = ladderFrame(base, pathAt, { anim: { col: 2, t: 0.25 }, cursor: null, locked: false });
     expect(m.paths).toEqual([revealed, { ...pathAt[2], progress: 0.25 }]);
   });
 
   it("an animation on a column with no path adds nothing", () => {
-    expect(ladderFrame(base, pathAt, { col: 7, t: 0.5 }, null).paths).toEqual([revealed]);
+    expect(
+      ladderFrame(base, pathAt, { anim: { col: 7, t: 0.5 }, cursor: null, locked: false }).paths,
+    ).toEqual([revealed]);
   });
 
   it("draws the cursor clamped to the grid (stale cursor after the ladder shrank)", () => {
-    expect(ladderFrame(base, pathAt, null, { row: 3, col: 1 }).cursor).toEqual({ row: 3, col: 1 });
-    expect(ladderFrame(base, pathAt, null, { row: 20, col: 9 }).cursor).toEqual({
+    expect(
+      ladderFrame(base, pathAt, { anim: null, cursor: { row: 3, col: 1 }, locked: false }).cursor,
+    ).toEqual({ row: 3, col: 1 });
+    expect(
+      ladderFrame(base, pathAt, { anim: null, cursor: { row: 20, col: 9 }, locked: false }).cursor,
+    ).toEqual({
       row: 11,
       col: 2,
     });
   });
 
+  it("a locked ladder takes no edits, so no cursor", () => {
+    const m = ladderFrame(base, pathAt, { anim: null, cursor: { row: 3, col: 1 }, locked: true });
+    expect(m.cursor).toBeNull();
+  });
+
   it("a one-post ladder has no gap, so no cursor", () => {
     const solo = { ...base, ladder: { cols: 1, rows: 12, rungs: [] } };
-    expect(ladderFrame(solo, pathAt, null, { row: 0, col: 0 }).cursor).toBeNull();
+    expect(
+      ladderFrame(solo, pathAt, { anim: null, cursor: { row: 0, col: 0 }, locked: false }).cursor,
+    ).toBeNull();
   });
 
   it("never mutates the cached base or its path table", () => {
     const before = structuredClone({ base, pathAt });
-    ladderFrame(base, pathAt, { col: 1, t: 0.5 }, { row: 2, col: 2 });
+    ladderFrame(base, pathAt, {
+      anim: { col: 1, t: 0.5 },
+      cursor: { row: 2, col: 2 },
+      locked: false,
+    });
     expect({ base, pathAt }).toEqual(before);
   });
 });
