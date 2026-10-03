@@ -594,13 +594,28 @@ const colorFor = (id: string | null | undefined, index = rosterIndex()): number 
  * on every full canvas render; animation frames and cursor moves reuse it.
  * Invariant: anything that mutates the run or roster ends in
  * `syncControls`/`renderLadderCanvas` — the `run` identity check below only catches
- * a replaced run, not an in-place edit.
+ * a replaced run, not an in-place edit; dev builds assert it via `fingerprint`.
  */
 interface LadderFrameBase {
   run: LadderRun;
   model: LadderViewModel;
   pathAt: readonly LadderPath[];
+  /** Dev only: snapshot of every input the base reads; empty in production. */
+  fingerprint: string;
 }
+
+/** Every run/roster input `ladderFrameBase` reads, serialized for the dev stale check. */
+const ladderBaseFingerprint = (run: LadderRun): string =>
+  JSON.stringify([
+    run.ladder,
+    run.players.map((p) => [p.id, p.name]),
+    run.placement,
+    run.prizes.map((z) => [z.id, z.name]),
+    run.slots,
+    run.traces,
+    run.revealed,
+    state.participants.map((p) => p.id),
+  ]);
 
 let ladderBase: LadderFrameBase | null = null;
 
@@ -633,6 +648,7 @@ function ladderFrameBase(run: LadderRun): LadderFrameBase {
       paths: pathAt.filter((_, c) => run.revealed[c]).map((p) => ({ ...p, progress: 1 })),
     },
     pathAt,
+    fingerprint: import.meta.env.DEV ? ladderBaseFingerprint(run) : "",
   };
 }
 
@@ -655,8 +671,11 @@ function renderLadderCanvas() {
  * the run was replaced.
  */
 function renderLadderFrame() {
-  if (!ladderBase || ladderBase.run !== ladderRun) renderLadderCanvas();
-  else ladderView.setModel(ladderModel(ladderBase));
+  if (!ladderBase || ladderBase.run !== ladderRun) return renderLadderCanvas();
+  if (import.meta.env.DEV && ladderBase.fingerprint !== ladderBaseFingerprint(ladderBase.run)) {
+    throw new Error("ladder: stale frame base — in-place run edit skipped renderLadderCanvas");
+  }
+  ladderView.setModel(ladderModel(ladderBase));
 }
 
 function renderLadder() {
