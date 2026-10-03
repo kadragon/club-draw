@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   type LadderPath,
+  type LadderRunState,
   type LadderViewModel,
   labelRotates,
+  ladderBaseFresh,
+  ladderBaseKey,
   ladderFrame,
   ladderLayout,
   moveRungCursor,
@@ -195,5 +198,48 @@ describe("ladderFrame — per-frame overlay on the cached static model", () => {
       locked: false,
     });
     expect({ base, pathAt }).toEqual(before);
+  });
+});
+
+describe("ladderBaseFresh — cached frame base is stale iff a source reference changed", () => {
+  const run = (): LadderRunState => ({
+    ladder: { cols: 2, rows: 12, rungs: [] },
+    players: [],
+    prizes: [],
+    placement: ["a", "b"],
+    slots: [null, "z"],
+    traces: [],
+    revealed: [false, false],
+  });
+  const roster: readonly unknown[] = [];
+
+  it("same references → fresh", () => {
+    const r = run();
+    expect(ladderBaseFresh(ladderBaseKey(r, roster), r, roster)).toBe(true);
+  });
+
+  it("a replaced revealed / placement / ladder / roster → stale", () => {
+    const r = run();
+    const built = ladderBaseKey(r, roster);
+    expect(ladderBaseFresh(built, { ...r, revealed: [true, false] }, roster)).toBe(false);
+    expect(ladderBaseFresh(built, { ...r, placement: ["b", "a"] }, roster)).toBe(false);
+    expect(ladderBaseFresh(built, { ...r, ladder: { ...r.ladder } }, roster)).toBe(false);
+    expect(ladderBaseFresh(built, r, [...roster])).toBe(false);
+  });
+
+  it("equal-but-new arrays are stale: identity, not deep equality, decides", () => {
+    const r = run();
+    const built = ladderBaseKey(r, roster);
+    expect(ladderBaseFresh(built, { ...r, revealed: [...r.revealed] }, roster)).toBe(false);
+  });
+
+  // Enforced by `tsc` (`bun run build`, in CI), not by vitest: once a field stops
+  // being readonly, its expect-error directive goes unused and the typecheck fails.
+  it("in-place edits do not typecheck — replace the array instead", () => {
+    const r = run();
+    // @ts-expect-error revealed is readonly: an in-place reveal would slip past `===`
+    r.revealed[0] = true;
+    // @ts-expect-error placement is readonly
+    r.placement[0] = null;
   });
 });
