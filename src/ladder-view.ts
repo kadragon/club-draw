@@ -1,7 +1,8 @@
 // Canvas renderer for the ladder. Draws a precomputed model only — it never traces,
 // shuffles or decides anything, so what it shows is exactly what ladder.ts resolved.
 
-import type { Ladder, PathPoint, Rung } from "./ladder.js";
+import type { Ladder, PathPoint, Placement, Rung, Trace } from "./ladder.js";
+import type { Participant, Prize } from "./types.js";
 import { LABEL_INK, PALETTE } from "./wheel.js";
 
 const FONT = '"Pretendard Variable", system-ui, sans-serif';
@@ -141,6 +142,37 @@ export function ladderFrame(
     paths: anim && moving ? [...base.paths, { ...moving, progress: anim.t }] : base.paths,
     cursor: cursor && !locked && cols > 1 ? moveRungCursor(cursor, 0, 0, cols, rows) : null,
   };
+}
+
+/**
+ * The run state a cached frame base is built from. Arrays are readonly so a change
+ * must replace the array, never edit it in place — that is what lets `===` alone
+ * tell a stale base from a fresh one.
+ */
+export interface LadderRunState {
+  ladder: Ladder;
+  players: readonly Participant[];
+  prizes: readonly Prize[];
+  placement: Placement;
+  /** Bottom column → prize id (null = 꽝). Null until lock. */
+  slots: readonly (string | null)[] | null;
+  traces: readonly Trace[] | null;
+  revealed: readonly boolean[];
+}
+
+/** Every reference a frame base was built from: the run's fields plus the roster (colors). */
+export type LadderBaseKey<R extends LadderRunState = LadderRunState> = Readonly<R> & {
+  readonly roster: readonly unknown[];
+};
+
+export const ladderBaseKey = <R extends LadderRunState>(
+  run: R,
+  roster: readonly unknown[],
+): LadderBaseKey<R> => ({ ...run, roster });
+
+/** True while every source reference is unchanged, i.e. the cached base still applies. */
+export function ladderBaseFresh(built: LadderBaseKey, now: LadderBaseKey): boolean {
+  return (Object.keys(built) as (keyof LadderBaseKey)[]).every((k) => built[k] === now[k]);
 }
 
 export interface Point {

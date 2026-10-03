@@ -31,20 +31,22 @@ import {
   LADDER_DENSITIES,
   LADDER_MAX_COLS,
   LADDER_ROWS,
-  type Ladder,
   type LadderDensity,
   placeAt,
   type Rung,
   shuffleSlots,
-  type Trace,
   toggleRung,
   traceLadder,
 } from "./ladder.js";
 import {
   createLadderView,
   type LadderAnim,
+  type LadderBaseKey,
   type LadderPath,
+  type LadderRunState,
   type LadderViewModel,
+  ladderBaseFresh,
+  ladderBaseKey,
   ladderFrame,
   ladderLayout,
   moveRungCursor,
@@ -475,22 +477,16 @@ function renderAll() {
 // each reveal is applied to `state` immediately, so a reload keeps revealed results
 // and drops the unrevealed remainder back to undrawn.
 
-interface LadderRun {
-  ladder: Ladder;
-  /** Players riding this ladder, roster order. */
-  players: Participant[];
-  /** Top column → player id; null = empty slot. Frozen (and full) once locked. */
-  placement: (string | null)[];
-  /** Prizes riding this ladder: the leading min(M, N) undrawn ones, list order. */
-  prizes: Prize[];
-  /** Bottom column → prize id (null = 꽝). Null until lock — this is the draw. */
-  slots: (string | null)[] | null;
-  /** Start column → traced path, computed once at lock (the ladder is frozen then). */
-  traces: Trace[] | null;
+/**
+ * From `LadderRunState`: `players` (roster order), `placement` (top column → player
+ * id, frozen and full once locked), `prizes` (the leading min(M, N) undrawn ones),
+ * `slots` (null until lock — this is the draw), `traces` (start column → path,
+ * computed once at lock), `revealed` (per start column: result revealed and applied?).
+ * Its arrays are readonly — replace, never edit in place (see `ladderBaseFresh`).
+ */
+interface LadderRun extends LadderRunState {
   /** Rungs hand-edited since the last generation; a density change must confirm first. */
   edited: boolean;
-  /** Per start column: has this player's result been revealed and applied? */
-  revealed: boolean[];
   /** Inputs the run was built from; an unlocked run rebuilds when they change. */
   signature: string;
 }
@@ -591,21 +587,15 @@ const colorFor = (id: string | null | undefined, index = rosterIndex()): number 
 /**
  * The view model minus the per-frame overlay (path being animated, rung cursor):
  * labels, revealed paths, and each path's points and color keyed by column. Rebuilt
- * on every full canvas render; animation frames and cursor moves reuse it.
- * Invariant: anything that mutates the run or roster ends in
- * `syncControls`/`renderLadderCanvas` — the `run` identity check below only catches
- * a replaced run, not an in-place edit; dev builds check it via `snapshot`.
+ * on every full canvas render; animation frames and cursor moves reuse it while
+ * `key` — the run's fields and the roster, by reference — is unchanged.
  */
 interface LadderFrameBase {
   run: LadderRun;
+  key: LadderBaseKey;
   model: LadderViewModel;
   pathAt: readonly LadderPath[];
-  /** Dev only: serialized model/pathAt as built (the model aliases run.ladder); empty in production. */
-  snapshot: string;
 }
-
-const ladderBaseSnapshot = (model: LadderViewModel, pathAt: readonly LadderPath[]): string =>
-  JSON.stringify([model, pathAt]);
 
 let ladderBase: LadderFrameBase | null = null;
 
@@ -635,8 +625,7 @@ function ladderFrameBase(run: LadderRun): LadderFrameBase {
     }),
     paths: pathAt.filter((_, c) => run.revealed[c]).map((p) => ({ ...p, progress: 1 })),
   };
-  const snapshot = import.meta.env.DEV ? ladderBaseSnapshot(model, pathAt) : "";
-  return { run, model, pathAt, snapshot };
+  return { run, key: ladderBaseKey(run, state.participants), model, pathAt };
 }
 
 /** The base plus the path in flight and, before lock, the focused rung cursor. */
@@ -655,16 +644,15 @@ function renderLadderCanvas() {
 
 /**
  * Overlay-only change (animation frame, cursor move/focus): reuse the base unless
- * the run was replaced. Dev builds also rebuild the base and, if it drifted (an
- * in-place edit skipped `renderLadderCanvas`), log an error and re-render from scratch
- * — logging rather than throwing so an animation in flight still resolves.
+ * the run was replaced or any of its source references changed since it was built.
  */
 function renderLadderFrame() {
-  if (!ladderBase || ladderBase.run !== ladderRun) return renderLadderCanvas();
-  if (import.meta.env.DEV && ladderBase.snapshot !== ladderFrameBase(ladderBase.run).snapshot) {
-    console.error("ladder: stale frame base — in-place run edit skipped renderLadderCanvas");
+  if (
+    !ladderRun ||
+    ladderBase?.run !== ladderRun ||
+    !ladderBaseFresh(ladderBase.key, ladderBaseKey(ladderRun, state.participants))
+  )
     return renderLadderCanvas();
-  }
   ladderView.setModel(ladderModel(ladderBase));
 }
 
@@ -766,7 +754,7 @@ function onLadderSlot(col: number) {
     void revealLadderAt(col);
     return;
   }
-  if (ladderPick !== null) run.placement = [...placeAt(run.placement, col, ladderPick)];
+  if (ladderPick !== null) run.placement = placeAt(run.placement, col, ladderPick);
   else if (run.placement[col] !== null) run.placement = clearAt(run.placement, col);
   else return;
   ladderPick = null;
@@ -1012,7 +1000,7 @@ function animateLadderPath(col: number, ms: number): Promise<void> {
  * false defers the fanfare to the caller (an instant batch would stack them).
  */
 function applyLadderReveal(run: LadderRun, col: number, celebrate: boolean): boolean {
-  run.revealed[col] = true;
+  run.revealed = run.revealed.map((r, c) => r || c === col);
   const playerId = run.placement[col];
   const prizeId = run.slots![run.traces![col]!.endCol];
   const won =
