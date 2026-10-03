@@ -5,6 +5,7 @@
 
 ## Review Backlog
 
-### PR #60 — ladder: pure ladderFrame overlay, cursor moves reuse cached base (2026-09-23)
+### PR #62 — ladder: dev-only stale assertion for cached frame base (2026-10-03)
 
-- [ ] [constraint] 커서 이동·포커스까지 캐시된 base를 재사용 — "run 제자리 변경은 `syncControls`/`renderLadderCanvas`로 끝난다" 불변식이 주석뿐. `renderLadderFrame`에 dev 전용 run fingerprint stale 단언 추가 (source: code-review) — `src/main.ts` `renderLadderFrame`
+- [ ] [debt] `LadderRun` 제자리 변경(`run.revealed[col] = true` 등) 대신 참조 교체로 바꾸고 base에 참조 저장 → `renderLadderFrame`이 모든 빌드에서 `===` 필드 비교로 stale 판정 (source: code-review) — `src/main.ts` `renderLadderFrame`
+- [ ] [constraint] stale base 검사 자동 테스트 없음 — snapshot 비교 헬퍼를 순수 모듈로 빼서 제자리 `revealed`/`placement` 변경이 불일치를 내는지 단위 테스트 (source: code-review) — `src/main.ts` `ladderBaseSnapshot`
