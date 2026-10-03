@@ -625,6 +625,9 @@ function ladderFrameBase(run: LadderRun): LadderFrameBase {
     }),
     paths: pathAt.filter((_, c) => run.revealed[c]).map((p) => ({ ...p, progress: 1 })),
   };
+  // The roster is keyed by reference, yet adds `push` in place: safe only because an
+  // append never shifts an existing id's index, so no color changes. Anything that
+  // reorders or removes participants must replace `state.participants`.
   return { run, key: ladderBaseKey(run, state.participants), model, pathAt };
 }
 
@@ -650,7 +653,7 @@ function renderLadderFrame() {
   if (
     !ladderRun ||
     ladderBase?.run !== ladderRun ||
-    !ladderBaseFresh(ladderBase.key, ladderBaseKey(ladderRun, state.participants))
+    !ladderBaseFresh(ladderBase.key, ladderRun, state.participants)
   )
     return renderLadderCanvas();
   ladderView.setModel(ladderModel(ladderBase));

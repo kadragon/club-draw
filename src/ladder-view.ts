@@ -147,10 +147,12 @@ export function ladderFrame(
 /**
  * The run state a cached frame base is built from. Arrays are readonly so a change
  * must replace the array, never edit it in place — that is what lets `===` alone
- * tell a stale base from a fresh one.
+ * tell a stale base from a fresh one. Nested values (the ladder, traces, players,
+ * prizes) are immutable by the same rule: `toggleRung`/`generateRungs`/`traceLadder`
+ * return new objects, and a roster change rebuilds an unlocked run.
  */
 export interface LadderRunState {
-  ladder: Ladder;
+  ladder: Readonly<Ladder>;
   players: readonly Participant[];
   prizes: readonly Prize[];
   placement: Placement;
@@ -161,18 +163,42 @@ export interface LadderRunState {
 }
 
 /** Every reference a frame base was built from: the run's fields plus the roster (colors). */
-export type LadderBaseKey<R extends LadderRunState = LadderRunState> = Readonly<R> & {
+export interface LadderBaseKey extends Readonly<LadderRunState> {
   readonly roster: readonly unknown[];
-};
+}
 
-export const ladderBaseKey = <R extends LadderRunState>(
-  run: R,
+// A Record over the keys forces this list to name every LadderRunState field.
+const BASE_FIELDS = Object.keys({
+  ladder: 0,
+  players: 0,
+  prizes: 0,
+  placement: 0,
+  slots: 0,
+  traces: 0,
+  revealed: 0,
+} satisfies Record<keyof LadderRunState, 0>) as (keyof LadderRunState)[];
+
+export const ladderBaseKey = (run: LadderRunState, roster: readonly unknown[]): LadderBaseKey => ({
+  ladder: run.ladder,
+  players: run.players,
+  prizes: run.prizes,
+  placement: run.placement,
+  slots: run.slots,
+  traces: run.traces,
+  revealed: run.revealed,
+  roster,
+});
+
+/**
+ * True while every source reference is unchanged, i.e. the cached base still applies.
+ * Compares in place — no allocation, since it runs on every animation frame.
+ */
+export function ladderBaseFresh(
+  built: LadderBaseKey,
+  run: LadderRunState,
   roster: readonly unknown[],
-): LadderBaseKey<R> => ({ ...run, roster });
-
-/** True while every source reference is unchanged, i.e. the cached base still applies. */
-export function ladderBaseFresh(built: LadderBaseKey, now: LadderBaseKey): boolean {
-  return (Object.keys(built) as (keyof LadderBaseKey)[]).every((k) => built[k] === now[k]);
+): boolean {
+  return built.roster === roster && BASE_FIELDS.every((k) => built[k] === run[k]);
 }
 
 export interface Point {
