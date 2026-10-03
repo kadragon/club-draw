@@ -594,28 +594,18 @@ const colorFor = (id: string | null | undefined, index = rosterIndex()): number 
  * on every full canvas render; animation frames and cursor moves reuse it.
  * Invariant: anything that mutates the run or roster ends in
  * `syncControls`/`renderLadderCanvas` — the `run` identity check below only catches
- * a replaced run, not an in-place edit; dev builds assert it via `fingerprint`.
+ * a replaced run, not an in-place edit; dev builds check it via `snapshot`.
  */
 interface LadderFrameBase {
   run: LadderRun;
   model: LadderViewModel;
   pathAt: readonly LadderPath[];
-  /** Dev only: snapshot of every input the base reads; empty in production. */
-  fingerprint: string;
+  /** Dev only: serialized model/pathAt as built (the model aliases run.ladder); empty in production. */
+  snapshot: string;
 }
 
-/** Every run/roster input `ladderFrameBase` reads, serialized for the dev stale check. */
-const ladderBaseFingerprint = (run: LadderRun): string =>
-  JSON.stringify([
-    run.ladder,
-    run.players.map((p) => [p.id, p.name]),
-    run.placement,
-    run.prizes.map((z) => [z.id, z.name]),
-    run.slots,
-    run.traces,
-    run.revealed,
-    state.participants.map((p) => p.id),
-  ]);
+const ladderBaseSnapshot = (model: LadderViewModel, pathAt: readonly LadderPath[]): string =>
+  JSON.stringify([model, pathAt]);
 
 let ladderBase: LadderFrameBase | null = null;
 
@@ -630,26 +620,23 @@ function ladderFrameBase(run: LadderRun): LadderFrameBase {
     points: t.path,
     color: colorFor(run.placement[c], roster),
   }));
-  return {
-    run,
-    model: {
-      ladder: run.ladder,
-      top: run.players.map((_, c) => {
-        const p = playerAt(run, c, byId);
-        return p ? { name: p.name, color: colorFor(p.id, roster) } : null;
-      }),
-      bottom: run.players.map((_, c) => {
-        const id = run.slots?.[c] ?? null;
-        return {
-          covered: !reached.has(c),
-          prize: id === null ? null : (prizeName.get(id) ?? null),
-        };
-      }),
-      paths: pathAt.filter((_, c) => run.revealed[c]).map((p) => ({ ...p, progress: 1 })),
-    },
-    pathAt,
-    fingerprint: import.meta.env.DEV ? ladderBaseFingerprint(run) : "",
+  const model: LadderViewModel = {
+    ladder: run.ladder,
+    top: run.players.map((_, c) => {
+      const p = playerAt(run, c, byId);
+      return p ? { name: p.name, color: colorFor(p.id, roster) } : null;
+    }),
+    bottom: run.players.map((_, c) => {
+      const id = run.slots?.[c] ?? null;
+      return {
+        covered: !reached.has(c),
+        prize: id === null ? null : (prizeName.get(id) ?? null),
+      };
+    }),
+    paths: pathAt.filter((_, c) => run.revealed[c]).map((p) => ({ ...p, progress: 1 })),
   };
+  const snapshot = import.meta.env.DEV ? ladderBaseSnapshot(model, pathAt) : "";
+  return { run, model, pathAt, snapshot };
 }
 
 /** The base plus the path in flight and, before lock, the focused rung cursor. */
@@ -668,12 +655,15 @@ function renderLadderCanvas() {
 
 /**
  * Overlay-only change (animation frame, cursor move/focus): reuse the base unless
- * the run was replaced.
+ * the run was replaced. Dev builds also rebuild the base and, if it drifted (an
+ * in-place edit skipped `renderLadderCanvas`), log an error and re-render from scratch
+ * — logging rather than throwing so an animation in flight still resolves.
  */
 function renderLadderFrame() {
   if (!ladderBase || ladderBase.run !== ladderRun) return renderLadderCanvas();
-  if (import.meta.env.DEV && ladderBase.fingerprint !== ladderBaseFingerprint(ladderBase.run)) {
-    throw new Error("ladder: stale frame base — in-place run edit skipped renderLadderCanvas");
+  if (import.meta.env.DEV && ladderBase.snapshot !== ladderFrameBase(ladderBase.run).snapshot) {
+    console.error("ladder: stale frame base — in-place run edit skipped renderLadderCanvas");
+    return renderLadderCanvas();
   }
   ladderView.setModel(ladderModel(ladderBase));
 }
